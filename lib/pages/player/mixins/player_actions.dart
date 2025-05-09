@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:api/api.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
@@ -22,8 +20,7 @@ mixin PlayerActionsMixin<S extends StatefulWidget> on State<S> {
               if (controller.currentItem?.source is TVEpisode) {
                 final episode = await Api.tvEpisodeQueryById((controller.currentItem!.source as TVEpisode).id);
                 Api.setSkipTime(SkipTimeType.intro, MediaType.season, episode.seasonId, time);
-                controller.setSkipPosition(
-                    SkipTimeType.intro.name, controller.playlist.value.map((item) => max(time.inMilliseconds, item.start.inMilliseconds)).toList());
+                controller.setSkipPosition(SkipTimeType.intro.name, time);
               }
             }
           },
@@ -41,7 +38,7 @@ mixin PlayerActionsMixin<S extends StatefulWidget> on State<S> {
               if (controller.currentItem?.source is TVEpisode) {
                 final episode = await Api.tvEpisodeQueryById((controller.currentItem!.source as TVEpisode).id);
                 Api.setSkipTime(SkipTimeType.ending, MediaType.season, episode.seasonId, time);
-                controller.setSkipPosition(SkipTimeType.ending.name, List.generate(controller.playlist.value.length, (index) => time.inMilliseconds));
+                controller.setSkipPosition(SkipTimeType.ending.name, time);
               }
             }
           },
@@ -51,18 +48,26 @@ mixin PlayerActionsMixin<S extends StatefulWidget> on State<S> {
           title: Text(AppLocalizations.of(context)!.buttonDownload),
           onTap: () async {
             final item = controller.currentItem;
-            showNotification(
-              context,
-              Api.downloadTaskCreate(item!.url.queryParameters['id']!),
-              successText: AppLocalizations.of(context)!.tipsForDownload,
-            );
+            if (item?.source is TVEpisode) {
+              showNotification(
+                context,
+                Api.downloadTaskCreate((item!.source as TVEpisode).fileId),
+                successText: AppLocalizations.of(context)!.tipsForDownload,
+              );
+            } else if (item?.source is Movie) {
+              showNotification(
+                context,
+                Api.downloadTaskCreate((item!.source as Movie).fileId),
+                successText: AppLocalizations.of(context)!.tipsForDownload,
+              );
+            }
           },
         ),
     ];
   }
 }
 
-extension on PlaylistItem<dynamic> {
+extension on PlaylistItemDisplay<dynamic> {
   bool get downloadable {
     if (source is Movie) {
       return !(source as Movie).downloaded;

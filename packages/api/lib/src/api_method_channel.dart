@@ -24,7 +24,14 @@ class MethodChannelApi extends ApiPlatform {
   Future<String?> databasePath() => _methodChannel.invokeMethod<String>('databasePath');
 
   @override
-  Future<bool?> initialized() => _methodChannel.invokeMethod('initialized');
+  Future<bool?> initialized() async {
+    final port = await _methodChannel.invokeMethod<int>('initialized');
+    if (port != null) {
+      baseUrl = baseUrl.replace(port: port);
+      return true;
+    }
+    return false;
+  }
 
   @override
   Future<void> syncData(String filePath) => _methodChannel.invokeMethod('syncData', filePath);
@@ -100,8 +107,15 @@ class MethodChannelApi extends ApiPlatform {
       return true;
     }
     try {
-      final res = await Dio(BaseOptions(connectTimeout: const Duration(seconds: 30))).get(updateUrl);
-      final data = UpdateResp.fromJson(res.data);
+      late final UpdateResp data;
+      if (currentVersion.isPrerelease()) {
+        final res = await Dio(BaseOptions(connectTimeout: const Duration(seconds: 30))).get(updateUrl);
+        data = UpdateResp.fromJson(res.data[0]);
+      } else {
+        final res = await Dio(BaseOptions(connectTimeout: const Duration(seconds: 30))).get('$updateUrl/latest');
+        data = UpdateResp.fromJson(res.data);
+      }
+
       final suffix = switch (appFlavor) { 'tv' => '-tv', _ => '' };
       final url = switch (await _methodChannel.invokeMethod('arch')) {
         'arm64' => data.assets.firstWhereOrNull((item) => item.name == 'app-arm64-v8a$suffix-release.apk'),
@@ -133,7 +147,7 @@ class MethodChannelApi extends ApiPlatform {
   Stream<List<dynamic>> dlnaDiscover() async* {
     final data = await client.post('/dlna/discover/cb');
     final eventChannel = EventChannel('$_pluginNamespace/update/${data['id']}');
-    yield* eventChannel.receiveBroadcastStream().map((event) => jsonDecode(event) as List<Json>);
+    yield* eventChannel.receiveBroadcastStream().map((event) => jsonDecode(event) as List<dynamic>);
   }
 
   ///  Cast End

@@ -16,7 +16,8 @@ class PlayerCast<T> extends StatefulWidget {
   final CastDevice device;
   final int index;
   final int? theme;
-  final List<PlaylistItem<T>> playlist;
+  final List<PlaylistItemDisplay<T>> playlist;
+  final Future<PlaylistItem> Function(PlaylistItemDisplay<T>)? onGetPlayBackInfo;
 
   const PlayerCast({
     super.key,
@@ -25,6 +26,7 @@ class PlayerCast<T> extends StatefulWidget {
     this.theme,
     this.isTV = false,
     this.index = 0,
+    this.onGetPlayBackInfo,
   });
 
   @override
@@ -43,7 +45,7 @@ class _PlayerCastState<T> extends State<PlayerCast<T>> {
 
   bool get isLast => index.value == widget.playlist.length - 1;
 
-  PlaylistItem<T> get currentItem => widget.playlist.elementAt(index.value);
+  PlaylistItemDisplay<T> get currentItem => widget.playlist.elementAt(index.value);
 
   @override
   void initState() {
@@ -315,16 +317,18 @@ class _PlayerCastState<T> extends State<PlayerCast<T>> {
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   const IconButton(onPressed: null, icon: Icon(null)),
-                                  Padding(
-                                    padding: const EdgeInsets.all(8),
-                                    child: RichText(
-                                      overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.center,
-                                      text: TextSpan(style: Theme.of(context).textTheme.bodyMedium, children: [
-                                        const WidgetSpan(child: Icon(Icons.cast), alignment: PlaceholderAlignment.middle),
-                                        const WidgetSpan(child: SizedBox(width: 12)),
-                                        TextSpan(text: device.friendlyName),
-                                      ]),
+                                  Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(8),
+                                      child: RichText(
+                                        overflow: TextOverflow.ellipsis,
+                                        textAlign: TextAlign.center,
+                                        text: TextSpan(style: Theme.of(context).textTheme.bodyMedium, children: [
+                                          const WidgetSpan(child: Icon(Icons.cast), alignment: PlaceholderAlignment.middle),
+                                          const WidgetSpan(child: SizedBox(width: 12)),
+                                          TextSpan(text: device.friendlyName),
+                                        ]),
+                                      ),
                                     ),
                                   ),
                                   ListenableBuilder(
@@ -358,20 +362,26 @@ class _PlayerCastState<T> extends State<PlayerCast<T>> {
     if (!initial && fixedIndex == this.index.value) {
       return;
     }
-    final uri = widget.playlist[index].url;
-    if (uri.host == '127.0.0.1') {
-      await device.setUrl(uri.replace(host: await PlayerPlatform.instance.getLocalIpAddress()), title: currentItem.title ?? '');
+    late PlaylistItem playlistItem;
+
+    if (widget.onGetPlayBackInfo != null) {
+      playlistItem = await widget.onGetPlayBackInfo!(widget.playlist[fixedIndex]);
     } else {
-      await device.setUrl(uri);
+      playlistItem = widget.playlist[fixedIndex].toItem();
+    }
+    if (playlistItem.url.host == '127.0.0.1') {
+      await device.setUrl(playlistItem.url.replace(host: await PlayerPlatform.instance.getLocalIpAddress()), title: playlistItem.title ?? '');
+    } else {
+      await device.setUrl(playlistItem.url);
     }
     this.index.value = fixedIndex;
-    if (currentItem.start == Duration.zero) {
-      await device.seek(currentItem.start);
+    if (playlistItem.start != Duration.zero) {
+      await device.seek(playlistItem.start);
     }
   }
 }
 
-class _PlayerArtwork<T extends PlaylistItem<dynamic>> extends StatelessWidget {
+class _PlayerArtwork<T extends PlaylistItemDisplay<dynamic>> extends StatelessWidget {
   final T item;
   final ValueNotifier<bool> isPlaying;
 

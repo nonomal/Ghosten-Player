@@ -1,11 +1,11 @@
-import 'dart:math';
-
 import 'package:api/api.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:video_player/player.dart';
 
 import '../../components/player_i18n_adaptor.dart';
+import '../../models/models.dart';
+import '../../utils/utils.dart';
 import '../components/focusable_image.dart';
 import '../components/setting.dart';
 import '../components/time_picker.dart';
@@ -22,7 +22,7 @@ class CommonPlayerPage<T> extends StatefulWidget {
     this.isTV = false,
   });
 
-  final List<PlaylistItem<T>> playlist;
+  final List<PlaylistItemDisplay<T>> playlist;
   final int index;
   final int? theme;
   final bool isTV;
@@ -32,7 +32,48 @@ class CommonPlayerPage<T> extends StatefulWidget {
 }
 
 class _CommonPlayerPageState<T> extends State<CommonPlayerPage<T>> {
-  final _controller = PlayerController<T>(Api.log);
+  late final _controller = PlayerController<T>(
+    Api.log,
+    onGetPlayBackInfo: _onGetPlayBackInfo,
+    onPlaybackStatusUpdate: _onPlaybackStatusUpdate,
+  );
+
+  Future<PlaylistItem> _onGetPlayBackInfo(PlaylistItemDisplay<T> item) async {
+    final data = await Api.playbackInfo(item.fileId);
+    return PlaylistItem(
+      title: item.title,
+      description: item.description,
+      poster: item.poster,
+      start: item.start,
+      end: item.end,
+      url: Uri.parse(data.url).normalize(),
+      subtitles: data.subtitles.map((d) => d.toSubtitle()).toList(),
+      others: data.others,
+    );
+  }
+
+  Future<void> _onPlaybackStatusUpdate(PlaylistItem item, PlaybackStatusEvent eventType, Duration position, Duration duration) {
+    final source = _controller.currentItem!.source;
+    return switch (source) {
+      final TVEpisode s => Api.updatePlayedStatus(
+          LibraryType.tv,
+          s.id,
+          position: position,
+          duration: duration,
+          eventType: eventType.name,
+          others: item.others,
+        ),
+      final Movie s => Api.updatePlayedStatus(
+          LibraryType.movie,
+          s.id,
+          position: position,
+          duration: duration,
+          eventType: eventType.name,
+          others: item.others,
+        ),
+      _ => Future.value(),
+    };
+  }
 
   @override
   void dispose() {
@@ -45,9 +86,10 @@ class _CommonPlayerPageState<T> extends State<CommonPlayerPage<T>> {
     return Stack(
       children: [
         PlayerPlatformView(
-          initialized: () {
-            _controller.setSources(widget.playlist, widget.index);
-            _controller.play();
+          initialized: () async {
+            _controller.setPlaylist(widget.playlist);
+            await _controller.next(widget.index);
+            await _controller.play();
           },
         ),
         PlayerI18nAdaptor(
@@ -67,11 +109,10 @@ class _CommonPlayerPageState<T> extends State<CommonPlayerPage<T>> {
                               value: _controller.position.value,
                             ))));
                     if (time != null) {
-                      if (T is TVEpisode) {
+                      if (_controller.currentItem!.source is TVEpisode) {
                         final episode = await Api.tvEpisodeQueryById((_controller.currentItem!.source as TVEpisode).id);
                         Api.setSkipTime(SkipTimeType.intro, MediaType.season, episode.seasonId, time);
-                        _controller.setSkipPosition(
-                            SkipTimeType.intro.name, _controller.playlist.value.map((item) => max(time.inMilliseconds, item.start.inMilliseconds)).toList());
+                        _controller.setSkipPosition(SkipTimeType.intro.name, time);
                       }
                     }
                   },
@@ -90,10 +131,10 @@ class _CommonPlayerPageState<T> extends State<CommonPlayerPage<T>> {
                                   : Duration.zero,
                             ))));
                     if (time != null) {
-                      if (T is TVEpisode) {
+                      if (_controller.currentItem!.source is TVEpisode) {
                         final episode = await Api.tvEpisodeQueryById((_controller.currentItem!.source as TVEpisode).id);
                         Api.setSkipTime(SkipTimeType.ending, MediaType.season, episode.seasonId, time);
-                        _controller.setSkipPosition(SkipTimeType.ending.name, List.generate(_controller.playlist.value.length, (index) => time.inMilliseconds));
+                        _controller.setSkipPosition(SkipTimeType.ending.name, time);
                       }
                     }
                   },
@@ -103,23 +144,25 @@ class _CommonPlayerPageState<T> extends State<CommonPlayerPage<T>> {
                   leading: const Icon(Icons.download_outlined),
                   title: Text(AppLocalizations.of(context)!.buttonDownload),
                   onTap: () {
-                    final item = _controller.currentItem!;
-                    showNotification(
-                      context,
-                      Api.downloadTaskCreate(item.url.queryParameters['id']!),
-                      successText: AppLocalizations.of(context)!.tipsForDownload,
-                    );
+                    final item = _controller.currentItem;
+                    if (item?.source is TVEpisode) {
+                      showNotification(
+                        context,
+                        Api.downloadTaskCreate((item!.source as TVEpisode).fileId),
+                        successText: AppLocalizations.of(context)!.tipsForDownload,
+                        showSuccess: true,
+                      );
+                    } else if (item?.source is Movie) {
+                      showNotification(
+                        context,
+                        Api.downloadTaskCreate((item!.source as Movie).fileId),
+                        successText: AppLocalizations.of(context)!.tipsForDownload,
+                        showSuccess: true,
+                      );
+                    }
                   },
                 ),
             ],
-            onMediaChange: (index, position, duration) {
-              final item = _controller.playlist.value[index];
-              if (item.source is TVEpisode) {
-                Api.updatePlayedStatus(LibraryType.tv, (item.source as TVEpisode).id, position: position, duration: duration);
-              } else if (item.source is Movie) {
-                Api.updatePlayedStatus(LibraryType.movie, (item.source as Movie).id, position: position, duration: duration);
-              }
-            },
             playlistItemBuilder: (context, index, onTap) {
               final item = _controller.playlist.value[index];
               return SizedBox(
@@ -164,7 +207,7 @@ class _CommonPlayerPageState<T> extends State<CommonPlayerPage<T>> {
   }
 }
 
-extension on PlaylistItem<dynamic> {
+extension on PlaylistItemDisplay<dynamic> {
   bool get downloadable {
     if (source is Movie) {
       return !(source as Movie).downloaded;
