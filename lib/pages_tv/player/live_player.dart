@@ -7,11 +7,13 @@ import 'package:date_format/date_format.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:provider/provider.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:video_player/player.dart';
 
 import '../../components/async_image.dart';
 import '../../components/playing_icon.dart';
+import '../../providers/shortcut_tv.dart';
 import '../../theme.dart';
 import '../../utils/utils.dart';
 import '../components/loading.dart';
@@ -20,7 +22,7 @@ import '../components/setting.dart';
 class LivePlayerPage extends StatefulWidget {
   const LivePlayerPage({super.key, required this.playlist, required this.index});
 
-  final List<PlaylistItem<Channel>> playlist;
+  final List<PlaylistItemDisplay<Channel>> playlist;
   final int index;
 
   @override
@@ -67,6 +69,7 @@ class _LivePlayerPageState extends State<LivePlayerPage> {
 
   @override
   Widget build(BuildContext context) {
+    final shortcuts = context.watch<ShortcutTV>();
     return Theme(
       data: tvDarkTheme,
       child: Scaffold(
@@ -82,7 +85,14 @@ class _LivePlayerPageState extends State<LivePlayerPage> {
           )),
           child: _ChannelListGrouped(
             controller: _controller,
-            onTap: (index) => _controller.next(index),
+            onTap: (index) async {
+              await _controller.next(index);
+              if (_controller.status.value == PlayerStatus.idle ||
+                  _controller.status.value == PlayerStatus.error ||
+                  _controller.status.value == PlayerStatus.ended) {
+                await _controller.play();
+              }
+            },
           ),
         ),
         endDrawer: SizedBox(
@@ -102,12 +112,18 @@ class _LivePlayerPageState extends State<LivePlayerPage> {
                               groupValue: _controller.currentItem?.url,
                               value: url,
                               title: Text('${AppLocalizations.of(context)!.playerBroadcastLine} ${index + 1}'),
-                              onChanged: (_) {
+                              onChanged: (_) async {
                                 final currentItem = _controller.currentItem!;
-                                final item = PlaylistItem(
-                                    url: url, sourceType: PlaylistItemSourceType.fromBroadcastUri(url), source: currentItem.source, poster: currentItem.poster);
-                                _controller.playlist.value[_controller.index.value!] = item;
-                                _controller.updateSource(item, _controller.index.value!);
+                                _controller.updateSource(currentItem.copyWith(url: url), _controller.index.value!);
+                                switch (_controller.status.value) {
+                                  case PlayerStatus.paused:
+                                  case PlayerStatus.ended:
+                                  case PlayerStatus.error:
+                                  case PlayerStatus.idle:
+                                    await _controller.play();
+                                  case PlayerStatus.playing:
+                                  case PlayerStatus.buffering:
+                                }
                                 setState(() {});
                               },
                             );
@@ -119,7 +135,8 @@ class _LivePlayerPageState extends State<LivePlayerPage> {
           fit: StackFit.expand,
           children: [
             PlayerPlatformView(initialized: () async {
-              await _controller.setSources(widget.playlist, widget.index);
+              _controller.setPlaylist(widget.playlist);
+              await _controller.next(widget.index);
               await _controller.play();
             }),
             PopScope(
@@ -144,38 +161,45 @@ class _LivePlayerPageState extends State<LivePlayerPage> {
                 autofocus: true,
                 onKeyEvent: (node, event) {
                   if (event is KeyUpEvent) {
-                    switch (event.logicalKey) {
-                      case LogicalKeyboardKey.arrowUp:
-                        if (_controller.index.value != null) _controller.next(_controller.index.value! + 1);
+                    if (event.logicalKey == shortcuts.nextChannel) {
+                      if (_controller.index.value != null) _controller.next(_controller.index.value! + 1);
+                      if (_controller.status.value == PlayerStatus.idle ||
+                          _controller.status.value == PlayerStatus.error ||
+                          _controller.status.value == PlayerStatus.ended) {
+                        _controller.play();
+                      }
+                      return KeyEventResult.handled;
+                    } else if (event.logicalKey == shortcuts.previousChannel) {
+                      if (_controller.index.value != null) _controller.next(_controller.index.value! - 1);
+                      if (_controller.status.value == PlayerStatus.idle ||
+                          _controller.status.value == PlayerStatus.error ||
+                          _controller.status.value == PlayerStatus.ended) {
+                        _controller.play();
+                      }
+                      return KeyEventResult.handled;
+                    } else if (event.logicalKey == LogicalKeyboardKey.select) {
+                      if (_isShowControls.value) {
+                        _controlsStream.add(ControlsStreamStatus.hide);
+                      } else {
+                        _controlsStream.add(ControlsStreamStatus.show);
+                      }
+                      return KeyEventResult.handled;
+                    } else if (event.logicalKey == shortcuts.switchLinePanel) {
+                      if (_controller.currentItem != null && _controller.currentItem!.source.links.length > 1) {
+                        _scaffoldKey.currentState!.openEndDrawer();
+                      }
+                      return KeyEventResult.handled;
+                    } else if (event.logicalKey == shortcuts.channelsPanel) {
+                      if (_controller.index.value != null) _drawerUpdateStream.value = 170 * (_controller.index.value! ~/ 2);
+                      _scrollController.dispose();
+                      _scrollController = ScrollController(initialScrollOffset: _drawerUpdateStream.value.toDouble());
+                      _scaffoldKey.currentState!.openDrawer();
+                      return KeyEventResult.handled;
+                    } else if (event.logicalKey == LogicalKeyboardKey.goBack) {
+                      if (_isShowControls.value) {
+                        _hideControls();
                         return KeyEventResult.handled;
-                      case LogicalKeyboardKey.arrowDown:
-                        if (_controller.index.value != null) _controller.next(_controller.index.value! - 1);
-                        return KeyEventResult.handled;
-                      case LogicalKeyboardKey.arrowRight:
-                        if (_controller.currentItem != null && _controller.currentItem!.source.links.length > 1) {
-                          _scaffoldKey.currentState!.openEndDrawer();
-                        }
-                        return KeyEventResult.handled;
-                      case LogicalKeyboardKey.select:
-                        if (_isShowControls.value) {
-                          _controlsStream.add(ControlsStreamStatus.hide);
-                        } else {
-                          _controlsStream.add(ControlsStreamStatus.show);
-                        }
-                        return KeyEventResult.handled;
-                      case LogicalKeyboardKey.arrowLeft:
-                      case LogicalKeyboardKey.contextMenu:
-                      case LogicalKeyboardKey.browserFavorites:
-                        if (_controller.index.value != null) _drawerUpdateStream.value = 170 * (_controller.index.value! ~/ 2);
-                        _scrollController.dispose();
-                        _scrollController = ScrollController(initialScrollOffset: _drawerUpdateStream.value.toDouble());
-                        _scaffoldKey.currentState!.openDrawer();
-                        return KeyEventResult.handled;
-                      case LogicalKeyboardKey.goBack:
-                        if (_isShowControls.value) {
-                          _hideControls();
-                          return KeyEventResult.handled;
-                        }
+                      }
                     }
                   }
                   return KeyEventResult.ignored;
@@ -343,7 +367,7 @@ class _ChannelListGrouped extends StatefulWidget {
 class _ChannelListGroupedState extends State<_ChannelListGrouped> {
   late final _groupedPlaylist = widget.controller.playlist.value.groupListsBy((channel) => channel.source.category);
   late final _groupName = ValueNotifier<String?>(null);
-  late final _playlist = ValueNotifier<List<PlaylistItem<Channel>>>([]);
+  late final _playlist = ValueNotifier<List<PlaylistItemDisplay<Channel>>>([]);
   late final _epg = ValueNotifier<List<ChannelEpgItem>?>([]);
 
   @override

@@ -81,22 +81,31 @@ Future<bool?> showConfirm(BuildContext context, String confirmText, [String? sub
             child: Stack(
               fit: StackFit.expand,
               children: [
-                const DecoratedBox(
+                DecoratedBox(
                   decoration: BoxDecoration(
                     image: DecorationImage(
-                      image: AssetImage('assets/tv/images/bg-stripe.png'),
+                      image: AssetImage(switch (Theme.of(context).brightness) {
+                        Brightness.dark => 'assets/tv/images/bg-stripe.png',
+                        Brightness.light => 'assets/tv/images/bg-stripe-light.png',
+                      }),
                       repeat: ImageRepeat.repeat,
                     ),
                   ),
                 ),
                 DecoratedBox(
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     gradient: RadialGradient(
-                      colors: [
-                        Colors.black38,
-                        Colors.black,
-                      ],
-                      stops: [0.2, 1],
+                      colors: switch (Theme.of(context).brightness) {
+                        Brightness.dark => [
+                            Colors.black38,
+                            Colors.black,
+                          ],
+                        Brightness.light => [
+                            Colors.white60,
+                            Colors.white,
+                          ]
+                      },
+                      stops: const [0.2, 1],
                       radius: 1,
                     ),
                   ),

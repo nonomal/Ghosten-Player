@@ -11,6 +11,7 @@ import '../../components/no_data.dart';
 import '../../components/playing_icon.dart';
 import '../../models/models.dart';
 import '../components/image_card.dart';
+import '../components/loading.dart';
 import '../player/player_controls_lite.dart';
 import '../utils/notification.dart';
 import 'dialogs/live_edit.dart';
@@ -58,7 +59,7 @@ class _LiveListPageState extends State<LiveListPage> {
                       ),
                       body: BlocBuilder<IptvCubit, List<Playlist>?>(builder: (context, items) {
                         return items == null
-                            ? const Center(child: CircularProgressIndicator())
+                            ? const Loading()
                             : items.isEmpty
                                 ? const NoData()
                                 : LayoutBuilder(builder: (context, constraints) {
@@ -107,7 +108,7 @@ class _LiveListPageState extends State<LiveListPage> {
                                                 onTap: () async {
                                                   if (MediaQuery.of(context).size.aspectRatio <= 1) {
                                                     final playlist = await Api.playlistChannelsQueryById(item.id);
-                                                    await _controller.setSources(playlist.map(FromMedia.fromChannel).toList(), 0);
+                                                    _controller.setPlaylist(playlist.map(FromMedia.fromChannel).toList());
                                                     _controller.play();
                                                     if (context.mounted) {
                                                       _showBottomSheet(
@@ -115,12 +116,15 @@ class _LiveListPageState extends State<LiveListPage> {
                                                           builder: (context) => _ChannelListGrouped(
                                                                 controller: _controller,
                                                                 activeIndex: _controller.index.value,
-                                                                onTap: (index) => _controller.next(index),
+                                                                onTap: (index) async {
+                                                                  await _controller.next(index);
+                                                                  await _controller.play();
+                                                                },
                                                               ));
                                                     }
                                                   } else {
                                                     final playlist = await Api.playlistChannelsQueryById(item.id);
-                                                    await _controller.setSources(playlist.map(FromMedia.fromChannel).toList(), 0);
+                                                    _controller.setPlaylist(playlist.map(FromMedia.fromChannel).toList());
                                                     _controller.play();
                                                   }
                                                 },
@@ -142,7 +146,10 @@ class _LiveListPageState extends State<LiveListPage> {
                   builder: (context, _) => _ChannelList(
                     playlist: _controller.playlist.value,
                     activeIndex: _controller.index.value,
-                    onTap: (index) => _controller.next(index),
+                    onTap: (index) async {
+                      await _controller.next(index);
+                      await _controller.play();
+                    },
                   ),
                 ))
           else
@@ -175,7 +182,7 @@ class _LiveListPageState extends State<LiveListPage> {
 class _ChannelList extends StatefulWidget {
   const _ChannelList({required this.playlist, required this.onTap, this.activeIndex});
 
-  final List<PlaylistItem<Channel>> playlist;
+  final List<PlaylistItemDisplay<Channel>> playlist;
   final int? activeIndex;
   final Function(int) onTap;
 
@@ -266,7 +273,7 @@ class _ChannelListGrouped extends StatefulWidget {
 
 class _ChannelListGroupedState extends State<_ChannelListGrouped> {
   late final _groupedPlaylist = widget.controller.playlist.value.groupListsBy((channel) => channel.source.category);
-  late final _playlist = ValueNotifier<List<PlaylistItem<Channel>>>([]);
+  late final _playlist = ValueNotifier<List<PlaylistItemDisplay<Channel>>>([]);
   final _groupName = ValueNotifier<String?>(null);
 
   @override
@@ -289,13 +296,13 @@ class _ChannelListGroupedState extends State<_ChannelListGrouped> {
                   return ListView.builder(
                     itemCount: _groupedPlaylist.keys.length,
                     itemBuilder: (context, index) {
-                      final name = _groupedPlaylist.keys.elementAt(index) ?? AppLocalizations.of(context)!.tagUnknown;
+                      final name = _groupedPlaylist.keys.elementAt(index);
                       return ListTile(
                         dense: true,
                         selected: _groupName.value == name,
                         selectedColor: Theme.of(context).colorScheme.onPrimaryContainer,
                         selectedTileColor: Theme.of(context).colorScheme.primaryContainer,
-                        title: Text(name),
+                        title: Text(name ?? AppLocalizations.of(context)!.tagUnknown),
                         onTap: () {
                           _groupName.value = name;
                           _playlist.value = _groupedPlaylist[name]!;

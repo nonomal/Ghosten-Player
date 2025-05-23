@@ -12,7 +12,7 @@ import '../components/setting.dart';
 import '../utils/notification.dart';
 import '../utils/player.dart';
 import '../utils/utils.dart';
-import 'components/actors.dart';
+import 'components/cast_crew.dart';
 import 'components/overview.dart';
 import 'components/scaffold.dart';
 import 'dialogs/movie_metadata.dart';
@@ -29,7 +29,7 @@ class MovieDetail extends StatefulWidget {
   State<MovieDetail> createState() => _MovieDetailState();
 }
 
-class _MovieDetailState extends State<MovieDetail> with ActionMixin, SearchableMixin {
+class _MovieDetailState extends State<MovieDetail> with ActionMixin {
   final _navigatorKey = GlobalKey<NavigatorState>();
   final _showSide = ValueNotifier(false);
   final _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -75,14 +75,14 @@ class _MovieDetailState extends State<MovieDetail> with ActionMixin, SearchableM
                         children: item.genres
                             .map((genre) => TextButton(
                                 style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero, visualDensity: VisualDensity.compact),
-                                onPressed: null,
+                                onPressed: () {},
                                 child: Text(genre.name, style: Theme.of(context).textTheme.labelSmall)))
                             .toList()),
                   ),
                   Text(
                     item.displayTitle(),
                     style: Theme.of(context).textTheme.displaySmall,
-                    maxLines: 3,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                   RichText(
@@ -91,7 +91,7 @@ class _MovieDetailState extends State<MovieDetail> with ActionMixin, SearchableM
                       children: [
                         const WidgetSpan(child: Icon(Icons.calendar_month_rounded, size: 14)),
                         const WidgetSpan(child: SizedBox(width: 4)),
-                        TextSpan(text: item.airDate?.format() ?? AppLocalizations.of(context)!.tagUnknown),
+                        TextSpan(text: item.releaseDate?.format() ?? AppLocalizations.of(context)!.tagUnknown),
                         const WidgetSpan(child: SizedBox(width: 20)),
                         const WidgetSpan(child: Icon(Icons.star, color: Colors.amber, size: 14)),
                         const WidgetSpan(child: SizedBox(width: 2)),
@@ -152,6 +152,7 @@ class _MovieDetailState extends State<MovieDetail> with ActionMixin, SearchableM
                   OverviewSection(
                     navigatorKey: _navigatorKey,
                     item: item,
+                    fileId: item.fileId,
                     description: RichText(
                       text: TextSpan(
                         style: Theme.of(context).textTheme.labelSmall,
@@ -162,9 +163,6 @@ class _MovieDetailState extends State<MovieDetail> with ActionMixin, SearchableM
                           const WidgetSpan(child: SizedBox(width: 20)),
                           TextSpan(text: AppLocalizations.of(context)!.seriesStatus(item.status.name)),
                           const WidgetSpan(child: Gap.hSM),
-                          if (item.fileSize != null) TextSpan(text: item.fileSize!.toSizeDisplay(), style: Theme.of(context).textTheme.labelSmall),
-                          if (item.fileSize != null) const WidgetSpan(child: Gap.hSM),
-                          TextSpan(text: '${item.filename}.${item.ext}', style: Theme.of(context).textTheme.labelSmall),
                           if (item.duration != null) const WidgetSpan(child: Gap.hSM),
                           if (item.duration != null) const WidgetSpan(child: Icon(Icons.access_time_rounded, size: 14)),
                           if (item.duration != null) const WidgetSpan(child: SizedBox(width: 4)),
@@ -179,9 +177,25 @@ class _MovieDetailState extends State<MovieDetail> with ActionMixin, SearchableM
                     autofocus: true,
                     leading: const Icon(Icons.play_arrow_rounded),
                     title: Text(AppLocalizations.of(context)!.buttonWatchNow),
-                    onTap: () {
-                      _play(item);
-                    },
+                    trailing: item.fileId != null
+                        ? (item.duration != null && item.lastPlayedTime != null && item.duration!.inSeconds > 0)
+                            ? SizedBox.square(
+                                dimension: 16,
+                                child: CircularProgressIndicator(
+                                  value: item.lastPlayedPosition!.inSeconds / item.duration!.inSeconds,
+                                  backgroundColor: Colors.white,
+                                  strokeAlign: BorderSide.strokeAlignInside,
+                                ),
+                              )
+                            : null
+                        : const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(
+                              backgroundColor: Colors.white,
+                              strokeAlign: BorderSide.strokeAlignInside,
+                            ),
+                          ),
+                    onTap: () => item.fileId != null ? _play(item) : null,
                   ),
                   ButtonSettingItem(
                     autofocus: true,
@@ -190,17 +204,14 @@ class _MovieDetailState extends State<MovieDetail> with ActionMixin, SearchableM
                   ),
                   ButtonSettingItem(
                     leading: const Icon(Icons.person_rounded),
-                    title: Text(AppLocalizations.of(context)!.titleCast),
+                    title: Text(AppLocalizations.of(context)!.titleCastCrew),
                     onTap: () {
                       _showSide.value = true;
                       navigateToSlideLeft(
                           _navigatorKey.currentContext!,
                           Align(
                             alignment: Alignment.topRight,
-                            child: FractionallySizedBox(
-                              widthFactor: 0.5,
-                              child: ActorSection(actors: item.actors),
-                            ),
+                            child: CastCrewSection(mediaCast: item.mediaCast, mediaCrew: item.mediaCrew, type: MediaType.movie),
                           ));
                     },
                   ),
@@ -228,42 +239,30 @@ class _MovieDetailState extends State<MovieDetail> with ActionMixin, SearchableM
             title: Text(AppLocalizations.of(context)!.buttonSaveMediaInfoToDriver),
             leading: const Icon(Icons.save_outlined),
             autofocus: true,
-            onTap: () async {
-              await showNotification(context, Api.movieRenameById(item.id));
-            },
+            // onTap: () => showNotification(context, Api.movieRenameById(item.id)),
           ),
           ButtonSettingItem(
             title: Text(AppLocalizations.of(context)!.buttonScraperMediaInfo),
             leading: const Icon(Icons.info_outline),
             onTap: () async {
-              final resp = await showNotification(context, _refreshMovie(context, item));
-              if (resp?.data ?? false) setState(() => refresh = true);
+              final data = await navigateTo<(String, String, String?)>(navigatorKey.currentContext!, SearchResultSelect(item: item));
+              if (data != null && context.mounted) {
+                final resp = await showNotification(context, Api.movieScraperById(item.id, data.$1, data.$2, data.$3));
+                if (resp?.error == null) setState(() {});
+              }
             },
           ),
           const DividerSettingItem(),
           buildEditMetadataAction(context, () async {
-            final res = await Navigator.of(context).push<(String, int?)>(FadeInPageRoute(builder: (context) => MovieMetadata(movie: item)));
-            if (res != null) {
-              final (title, year) = res;
-              await Api.movieMetadataUpdateById(id: item.id, title: title, airDate: year == null ? null : DateTime(year));
-              setState(() => refresh = true);
-            }
+            final res = await Navigator.of(context).push<bool>(FadeInPageRoute(builder: (context) => MovieMetadata(movie: item)));
+            if ((res ?? false) && context.mounted) setState(() => refresh = true);
           }),
           ButtonSettingItem(
             title: Text(AppLocalizations.of(context)!.buttonSubtitle),
             leading: const Icon(Icons.subtitles_outlined),
-            onTap: () async {
-              final subtitle = await Navigator.of(context).push<SubtitleData>(FadeInPageRoute(
-                  builder: (context) => SubtitleDialog(
-                        subtitle: item.subtitles.firstOrNull,
-                      )));
-              if (subtitle != null && context.mounted) {
-                final resp = await showNotification(context, Api.movieSubtitleUpdateById(id: item.id, subtitle: subtitle));
-                if (resp?.error == null) setState(() => refresh = true);
-              }
-            },
+            onTap: () => Navigator.of(context).push<SubtitleData>(FadeInPageRoute(builder: (context) => SubtitleListPage(fileId: item.fileId!))),
           ),
-          buildDownloadAction(context, item.url!),
+          buildDownloadAction(context, item.fileId),
           if (item.scrapper.id != null) buildHomeAction(context, ImdbUri(MediaType.movie, item.scrapper.id!).toUri()),
           const DividerSettingItem(),
           buildDeleteAction(context, () => Api.movieDeleteById(item.id)),
@@ -275,24 +274,9 @@ class _MovieDetailState extends State<MovieDetail> with ActionMixin, SearchableM
   Future<void> _play(Movie item) async {
     await toPlayer(
       context,
-      [FromMedia.fromMovie(item)],
+      ([FromMedia.fromMovie(item)], 0),
       theme: item.themeColor,
     );
     setState(() => refresh = true);
-  }
-
-  Future<bool> _refreshMovie(BuildContext context, Movie item) async {
-    return search(
-      context,
-      ({required String title, int? year, int? index}) => Api.movieUpdateById(
-        item.id,
-        title,
-        Localizations.localeOf(context).languageCode,
-        year: year.toString(),
-        index: index,
-      ),
-      title: item.title ?? item.originalTitle ?? item.filename,
-      year: item.airDate?.year,
-    );
   }
 }

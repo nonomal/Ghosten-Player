@@ -120,7 +120,10 @@ class _DetailScaffoldState<T extends MediaBase> extends State<DetailScaffold<T>>
           AsyncImage(item.backdrop!)
         else
           Image.asset(
-            'assets/tv/images/bg-pixel.webp',
+            switch (Theme.of(context).brightness) {
+              Brightness.dark => 'assets/tv/images/bg-pixel.webp',
+              Brightness.light => 'assets/tv/images/bg-pixel-light.webp',
+            },
             repeat: ImageRepeat.repeat,
           ),
         if (item.logo != null)
@@ -142,7 +145,7 @@ class _DetailScaffoldState<T extends MediaBase> extends State<DetailScaffold<T>>
                   gradient: LinearGradient(
                     colors: [
                       Theme.of(context).scaffoldBackgroundColor.withAlpha(item.backdrop != null ? 0xEE : 0xAA),
-                      const Color(0x66000000),
+                      Theme.of(context).scaffoldBackgroundColor.withAlpha(0x66),
                     ],
                     stops: const [0.3, 0.8],
                   ),

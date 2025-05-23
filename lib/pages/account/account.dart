@@ -1,5 +1,3 @@
-// ignore_for_file: constant_identifier_names
-
 import 'package:api/api.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -11,7 +9,6 @@ import '../../components/focus_card.dart';
 import '../../components/future_builder_handler.dart';
 import '../../components/no_data.dart';
 import '../../utils/utils.dart';
-import '../components/appbar_progress.dart';
 import '../utils/notification.dart';
 import '../viewers/file_viewer.dart';
 import 'account_login.dart';
@@ -36,12 +33,8 @@ class _AccountManageState extends State<AccountManage> {
   Widget build(BuildContext context) {
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      appBar: AppBar(
-        title: Text(AppLocalizations.of(context)!.pageTitleAccount),
-        bottom: const AppbarProgressIndicator(),
-      ),
+      appBar: AppBar(title: Text(AppLocalizations.of(context)!.pageTitleAccount)),
       body: FutureBuilderHandler<List<DriverAccount>>(
-          initialData: const [],
           future: Api.driverQueryAll(),
           builder: (context, snapshot) {
             return Scrollbar(
@@ -78,15 +71,16 @@ class _AccountManageState extends State<AccountManage> {
                               title: Text(AppLocalizations.of(context)!.pageTitleFileViewer),
                             ),
                           ),
-                          PopupMenuItem(
-                            padding: EdgeInsets.zero,
-                            onTap: () => navigateTo(context, AccountPreference(account: item)),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                              leading: const Icon(Icons.edit_outlined),
-                              title: Text(AppLocalizations.of(context)!.buttonEdit),
+                          if (item.type != DriverType.webdav)
+                            PopupMenuItem(
+                              padding: EdgeInsets.zero,
+                              onTap: () => navigateTo(context, AccountPreference(account: item)),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                                leading: const Icon(Icons.edit_outlined),
+                                title: Text(AppLocalizations.of(context)!.buttonEdit),
+                              ),
                             ),
-                          ),
                           PopupMenuItem(
                             padding: EdgeInsets.zero,
                             onTap: () async {
@@ -326,6 +320,7 @@ class Stepper extends StatelessWidget {
   }
 }
 
+// ignore_for_file: constant_identifier_names
 enum _AlipanVideoClarity {
   none,
   LD,

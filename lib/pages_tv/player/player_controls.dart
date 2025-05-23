@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:animations/animations.dart';
 import 'package:collection/collection.dart';
@@ -61,8 +62,8 @@ class _PlayerControlsState extends State<PlayerControls> {
   @override
   void initState() {
     if (widget.onMediaChange != null) {
-      _controller.mediaChange.addListener(() {
-        final data = _controller.mediaChange.value!;
+      _controller.beforeMediaChanged.addListener(() {
+        final data = _controller.beforeMediaChanged.value!;
         widget.onMediaChange!(data.$1.index, data.$1.position, data.$2);
       });
     }
@@ -426,8 +427,13 @@ class _PlayerControlsState extends State<PlayerControls> {
                 child: PlayerPlaylistView(
                   playlist: widget.controller.playlist.value,
                   activeIndex: widget.controller.index.value,
-                  onTap: (index) {
-                    widget.controller.next(index);
+                  onTap: (index) async {
+                    await widget.controller.next(index);
+                    if (widget.controller.status.value == PlayerStatus.ended ||
+                        widget.controller.status.value == PlayerStatus.error ||
+                        widget.controller.status.value == PlayerStatus.idle) {
+                      await widget.controller.play();
+                    }
                     _panelType.value = _PlayerPanelType.progressbar;
                   },
                 ),
@@ -833,7 +839,7 @@ class PlayerPlaylistView<T> extends StatefulWidget {
 
   final ValueChanged<int> onTap;
   final int? activeIndex;
-  final List<PlaylistItem<dynamic>> playlist;
+  final List<PlaylistItemDisplay<dynamic>> playlist;
 
   @override
   State<PlayerPlaylistView<T>> createState() => _PlayerPlaylistViewState<T>();
@@ -846,7 +852,8 @@ class _PlayerPlaylistViewState<T> extends State<PlayerPlaylistView<T>> {
   void didUpdateWidget(covariant PlayerPlaylistView<T> oldWidget) {
     final index = widget.activeIndex;
     if (index != oldWidget.activeIndex && index != null && index >= 0 && index < widget.playlist.length) {
-      _controller.animateTo(index * (200 + 12), duration: const Duration(milliseconds: 400), curve: Curves.easeOut);
+      final offset = min(_controller.position.maxScrollExtent, index * (200.0 + 12));
+      _controller.animateTo(offset, duration: const Duration(milliseconds: 400), curve: Curves.easeOut);
     }
     super.didUpdateWidget(oldWidget);
   }
@@ -921,7 +928,7 @@ class PlayerInfoView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-        listenable: _controller.index,
+        listenable: Listenable.merge([_controller.index, _controller.fatalError]),
         builder: (context, _) => Padding(
               padding: const EdgeInsets.only(top: 16, left: 16, right: 16),
               child: Row(
