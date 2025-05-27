@@ -1,5 +1,3 @@
-// ignore_for_file: constant_identifier_names
-
 import 'package:api/api.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -11,7 +9,6 @@ import '../../utils/utils.dart';
 import '../components/future_builder_handler.dart';
 import '../components/icon_button.dart';
 import '../components/setting.dart';
-import '../mixins/update.dart';
 import '../utils/notification.dart';
 import '../utils/utils.dart';
 import '../views/file_viewer.dart';
@@ -50,7 +47,9 @@ class _SettingsAccountPageState extends State<SettingsAccountPage> {
                     ),
                     actions: [
                       TVIconButton(onPressed: () => _showFilePicker(context, FilePickerType.remote, entry.$2.id, '/'), icon: const Icon(Icons.folder_outlined)),
-                      TVIconButton(onPressed: () => navigateToSlideLeft(context, AccountPreference(account: entry.$2)), icon: const Icon(Icons.edit_outlined)),
+                      if (entry.$2.type != DriverType.webdav)
+                        TVIconButton(
+                            onPressed: () => navigateToSlideLeft(context, AccountPreference(account: entry.$2)), icon: const Icon(Icons.edit_outlined)),
                       TVIconButton(
                           onPressed: () async {
                             final flag = await showConfirm(
@@ -59,7 +58,6 @@ class _SettingsAccountPageState extends State<SettingsAccountPage> {
                               final resp = await showNotification(context, Api.driverDeleteById(entry.$2.id));
                               if (resp?.error == null) {
                                 setState(() {});
-                                updateController.add(null);
                               }
                             }
                           },
@@ -316,6 +314,7 @@ class Stepper extends StatelessWidget {
   }
 }
 
+// ignore_for_file: constant_identifier_names
 enum _AlipanVideoClarity {
   none,
   LD,
