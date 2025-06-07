@@ -1,9 +1,9 @@
 import 'package:api/api.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 import '../../components/future_builder_handler.dart';
 import '../../components/scrollbar.dart';
+import '../../l10n/app_localizations.dart';
 import '../../utils/utils.dart';
 import '../../validators/validators.dart';
 import '../utils/notification.dart';
@@ -20,81 +20,89 @@ class _SystemSettingsServerState extends State<SystemSettingsServer> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Badge(label: const Text('Beta'), child: Text(AppLocalizations.of(context)!.settingsItemServer)),
+        title: Text(AppLocalizations.of(context)!.settingsItemServer),
         actions: [
           IconButton(
-              onPressed: () async {
-                final flag = await navigateTo<bool>(context, const _SystemSettingsAdd());
-                if (flag ?? false) setState(() {});
-              },
-              icon: const Icon(Icons.add))
+            onPressed: () async {
+              final flag = await navigateTo<bool>(context, const _SystemSettingsAdd());
+              if (flag ?? false) setState(() {});
+            },
+            icon: const Icon(Icons.add),
+          ),
         ],
       ),
       body: FutureBuilderHandler(
-          future: Api.serverQueryAll(),
-          builder: (context, snapshot) => ScrollbarListView.builder(
-                itemBuilder: (context, index) {
-                  final item = snapshot.requireData[index];
-                  return PopupMenuButton(
-                    offset: const Offset(1, 0),
-                    tooltip: '',
-                    itemBuilder: (context) => [
-                      if (!item.active)
-                        PopupMenuItem(
-                          padding: EdgeInsets.zero,
-                          onTap: () async {
-                            final resp = await showNotification(context, Api.serverActiveById(item.id));
-                            if (resp?.error == null && context.mounted) {
-                              setState(() {});
-                            }
-                          },
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                            leading: const Icon(Icons.check_rounded),
-                            title: Text(AppLocalizations.of(context)!.buttonActivate),
-                          ),
-                        ),
-                      if (!item.active)
-                        PopupMenuItem(
-                          padding: EdgeInsets.zero,
-                          onTap: () async {
-                            final confirmed = await showConfirm(context, AppLocalizations.of(context)!.deleteConfirmText);
-                            if (confirmed ?? false) {
-                              await Api.serverDeleteById(item.id);
-                              if (context.mounted) {
+        future: Api.serverQueryAll(),
+        builder:
+            (context, snapshot) => ScrollbarListView.builder(
+              itemBuilder: (context, index) {
+                final item = snapshot.requireData[index];
+                return PopupMenuButton(
+                  offset: const Offset(1, 0),
+                  tooltip: '',
+                  itemBuilder:
+                      (context) => [
+                        if (!item.active)
+                          PopupMenuItem(
+                            padding: EdgeInsets.zero,
+                            onTap: () async {
+                              final resp = await showNotification(context, Api.serverActiveById(item.id));
+                              if (resp?.error == null && context.mounted) {
                                 setState(() {});
                               }
-                            }
-                          },
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                            leading: const Icon(Icons.delete_outline_rounded),
-                            title: Text(AppLocalizations.of(context)!.buttonDelete),
+                            },
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                              leading: const Icon(Icons.check_rounded),
+                              title: Text(AppLocalizations.of(context)!.buttonActivate),
+                            ),
                           ),
-                        ),
-                    ],
-                    child: ListTile(
-                      leading: Icon(item.active ? Icons.check_rounded : null),
-                      trailing: item.invalid
-                          ? Container(
+                        if (!item.active && item.id != 0)
+                          PopupMenuItem(
+                            padding: EdgeInsets.zero,
+                            onTap: () async {
+                              final confirmed = await showConfirm(
+                                context,
+                                AppLocalizations.of(context)!.deleteConfirmText,
+                              );
+                              if (confirmed ?? false) {
+                                await Api.serverDeleteById(item.id);
+                                if (context.mounted) {
+                                  setState(() {});
+                                }
+                              }
+                            },
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                              leading: const Icon(Icons.delete_outline_rounded),
+                              title: Text(AppLocalizations.of(context)!.buttonDelete),
+                            ),
+                          ),
+                      ],
+                  child: ListTile(
+                    leading: Icon(item.active ? Icons.check_rounded : null),
+                    trailing:
+                        item.invalid
+                            ? Container(
                               padding: const EdgeInsets.all(2),
                               decoration: BoxDecoration(borderRadius: BorderRadius.circular(50), color: Colors.red),
                               child: const Icon(Icons.close, color: Colors.white, size: 12),
                             )
-                          : null,
-                      subtitle: Row(
-                        spacing: 8,
-                        children: [
-                          Text(item.type.name),
-                          if (item.username != null) Text(item.username!),
-                        ],
-                      ),
-                      title: Text(item.host),
+                            : null,
+                    title: Row(
+                      spacing: 8,
+                      children: [
+                        Text(AppLocalizations.of(context)!.driverType(item.type.name)),
+                        if (item.username != null) Text(item.username!),
+                      ],
                     ),
-                  );
-                },
-                itemCount: snapshot.requireData.length,
-              )),
+                    subtitle: Text(item.host),
+                  ),
+                );
+              },
+              itemCount: snapshot.requireData.length,
+            ),
+      ),
     );
   }
 }
@@ -112,12 +120,14 @@ class _SystemSettingsAddState extends State<_SystemSettingsAdd> {
   late final _serverAddress = TextEditingController();
   late final _username = TextEditingController();
   late final _userPassword = TextEditingController();
+  late final _userAgent = TextEditingController();
 
   @override
   void dispose() {
     _serverAddress.dispose();
     _username.dispose();
     _userPassword.dispose();
+    _userAgent.dispose();
     super.dispose();
   }
 
@@ -130,14 +140,17 @@ class _SystemSettingsAddState extends State<_SystemSettingsAdd> {
           IconButton(
             onPressed: () async {
               if (_formKey.currentState!.validate()) {
+                final userAgent = _userAgent.text.trim();
                 final resp = await showNotification(
-                    context,
-                    Api.serverInsert({
-                      'type': _type,
-                      'host': _serverAddress.text.trim(),
-                      'username': _username.text.trim(),
-                      'userPassword': _userPassword.text.trim(),
-                    }));
+                  context,
+                  Api.serverInsert({
+                    'type': _type,
+                    'host': _serverAddress.text.trim(),
+                    'username': _username.text.trim(),
+                    'userPassword': _userPassword.text.trim(),
+                    'userAgent': userAgent.isNotEmpty ? userAgent : null,
+                  }),
+                );
                 if (resp?.error == null && context.mounted) {
                   Navigator.of(context).pop(true);
                 }
@@ -162,7 +175,6 @@ class _SystemSettingsAddState extends State<_SystemSettingsAdd> {
                   labelText: AppLocalizations.of(context)!.serverFormItemLabelServerType,
                   prefixIcon: const Icon(Icons.domain),
                   isDense: true,
-                  hintText: '8.8.8.8',
                 ),
                 items: const [
                   DropdownMenuItem(value: 'emby', child: Text('Emby')),
@@ -172,7 +184,6 @@ class _SystemSettingsAddState extends State<_SystemSettingsAdd> {
               ),
               TextFormField(
                 controller: _serverAddress,
-                autofocus: true,
                 decoration: InputDecoration(
                   prefixIcon: const Icon(Icons.link),
                   border: const UnderlineInputBorder(),
@@ -184,7 +195,6 @@ class _SystemSettingsAddState extends State<_SystemSettingsAdd> {
               ),
               TextFormField(
                 controller: _username,
-                autofocus: true,
                 decoration: InputDecoration(
                   prefixIcon: const Icon(Icons.account_circle_outlined),
                   border: const UnderlineInputBorder(),
@@ -196,11 +206,20 @@ class _SystemSettingsAddState extends State<_SystemSettingsAdd> {
               ),
               TextFormField(
                 controller: _userPassword,
-                autofocus: true,
                 decoration: InputDecoration(
                   prefixIcon: const Icon(Icons.password),
                   border: const UnderlineInputBorder(),
                   labelText: AppLocalizations.of(context)!.loginFormItemLabelPwd,
+                  isDense: true,
+                ),
+                onEditingComplete: () => FocusScope.of(context).nextFocus(),
+              ),
+              TextFormField(
+                controller: _userAgent,
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.web_rounded),
+                  border: const UnderlineInputBorder(),
+                  labelText: AppLocalizations.of(context)!.loginFormItemLabelUserAgent,
                   isDense: true,
                 ),
                 onEditingComplete: () => FocusScope.of(context).nextFocus(),

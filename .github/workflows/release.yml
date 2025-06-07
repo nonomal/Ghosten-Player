@@ -18,12 +18,12 @@ jobs:
 
       - uses: subosito/flutter-action@v1
         with:
-          flutter-version: '3.27.4'
+          flutter-version: '3.32.1'
 
       - run: flutter pub get
 
       - run: |
-          sed -i '890a\rect = rect.inflate(96);' ${{ env.FLUTTER_ROOT }}/packages/flutter/lib/src/rendering/viewport.dart
+          sed -i '918a\rect = rect.inflate(96);' ${{ env.FLUTTER_ROOT }}/packages/flutter/lib/src/rendering/viewport.dart
 
       - name: Decode Keystore
         run: |
@@ -65,7 +65,7 @@ jobs:
         run: |
           MAJOR=$(echo ${{ env.VERSION }} |  cut -d '.' -f 1)
           MINOR=$(echo ${{ env.VERSION }} |  cut -d '.' -f 2)
-          PATCH=$(echo ${{ env.VERSION }} |  cut -d '.' -f 3)
+          PATCH=$(echo ${{ env.VERSION }} |  cut -d '.' -f 3 | cut -d '-' -f 1)
           build_number=$((($MAJOR - 1) * 10000 + $MINOR * 100 + $PATCH))
           echo "BUILD_NUMBER=$build_number" >> $GITHUB_ENV
 
@@ -123,3 +123,24 @@ jobs:
           generate_release_notes: true
           prerelease: false
           files: build/app/outputs/flutter-apk/app-arm*-release.apk
+          append_body: true
+          body: |
+            > 如果项目对您有帮助，就请给颗[🌟Star](https://github.com/GhostenEditor/Ghosten-Player)吧。
+            > 请我喝咖啡(支持作者) ☕️ [赏你](https://github.com/GhostenEditor/Ghosten-Player?tab=readme-ov-file#%E8%B5%9E%E5%8A%A9)
+            > ${{vars.CHAT_GROUP}}
+
+            ## 🎉New Features
+            
+            1. 
+            
+            ## 🐞Bug Fixed
+            
+            1. 
+            
+            ## 🚀 Improvement
+            
+            1. 
+          
+            ## 📣 Breaking Change
+            
+            1. 

@@ -14,6 +14,7 @@ class MediaGridItem extends StatefulWidget {
     this.imageHeight,
     this.autofocus,
     this.placeholderIcon = Icons.image_not_supported_outlined,
+    this.floating,
   });
 
   final String? imageUrl;
@@ -24,6 +25,7 @@ class MediaGridItem extends StatefulWidget {
   final bool? autofocus;
   final GestureTapCallback? onTap;
   final IconData placeholderIcon;
+  final Widget? floating;
 
   @override
   State<MediaGridItem> createState() => MediaGridItemState();
@@ -34,7 +36,7 @@ class MediaGridItemState extends State<MediaGridItem> {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    final child = SizedBox(
       width: widget.imageWidth,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -55,21 +57,28 @@ class MediaGridItemState extends State<MediaGridItem> {
           Gap.vSM,
           if (widget.title != null)
             DefaultTextStyle(
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium!
-                  .copyWith(fontWeight: FontWeight.bold, color: _focused ? null : Theme.of(context).colorScheme.onSurfaceVariant),
+              style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                fontWeight: FontWeight.bold,
+                color: _focused ? null : Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
               overflow: TextOverflow.ellipsis,
               child: widget.title!,
             ),
           if (widget.subtitle != null)
             DefaultTextStyle(
-              style: Theme.of(context).textTheme.labelMedium!.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              style: Theme.of(
+                context,
+              ).textTheme.labelMedium!.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
               overflow: TextOverflow.ellipsis,
               child: widget.subtitle!,
             ),
         ],
       ),
     );
+    if (widget.floating != null) {
+      return Stack(children: [child, IgnorePointer(child: widget.floating)]);
+    } else {
+      return child;
+    }
   }
 }

@@ -43,11 +43,6 @@ class MethodChannelPlayer extends PlayerPlatform {
   }
 
   @override
-  setSkipPosition(String type, List<int> list) {
-    return _channel.invokeMethod('setSkipPosition', {'type': type, 'list': list});
-  }
-
-  @override
   Future<void> setTransform(List<double> matrix) {
     return _channel.invokeMethod('setTransform', {'matrix': matrix});
   }
@@ -58,8 +53,8 @@ class MethodChannelPlayer extends PlayerPlatform {
   }
 
   @override
-  Future<void> setSources(List<Map<String, dynamic>> playlist, int index) {
-    return _channel.invokeMethod('setSources', {'playlist': playlist, 'index': index});
+  Future<void> setSource(Map<String, dynamic>? item) {
+    return _channel.invokeMethod('setSource', item);
   }
 
   @override

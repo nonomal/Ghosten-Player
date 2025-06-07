@@ -1,9 +1,7 @@
 import 'dart:async';
 
-import 'package:date_format/date_format.dart';
 import 'package:flutter/material.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
-import 'package:rxdart/rxdart.dart';
 
 import 'api_method_channel.dart';
 import 'models.dart';
@@ -27,14 +25,11 @@ abstract class ApiPlatform extends PlatformInterface {
 
   abstract final ApiClient client;
 
-  final baseUrl = Uri(
+  Uri baseUrl = Uri(
     scheme: 'http',
     host: '127.0.0.1',
     port: 38916,
   );
-  static final StreamController<double?> streamController = ReplaySubject(maxSize: 1);
-  final Stream<double?> progress$ = streamController.stream;
-  late final Stream<double?> needUpdate$ = progress$.where((event) => event == 1).asBroadcastStream();
 
   Future<String?> databasePath() {
     throw UnimplementedError('databasePath() has not been implemented.');
@@ -61,6 +56,12 @@ abstract class ApiPlatform extends PlatformInterface {
   Future<void> requestStoragePermission() async {}
 
   /// File Start
+  Future<DriverFileInfo> fileInfo(String id) async {
+    final data = await client.get<Json>('/file/info', queryParameters: {'id': id});
+    final a = DriverFileInfo.fromJson(data!);
+    return a;
+  }
+
   Future<List<DriverFile>> fileList(int driverId, String parentFileId, {FileType? type, String? category}) async {
     final data = await client.post<JsonList>('/file/list', data: {
       'driverId': driverId,
@@ -83,6 +84,11 @@ abstract class ApiPlatform extends PlatformInterface {
     return client.put('/file/mkdir', data: {'driverId': driverId, 'parentFileId': parentFileId, 'name': name});
   }
 
+  Future<PlaybackInfo> playbackInfo(dynamic id) async {
+    final data = await client.get<Json>('/playback/info', queryParameters: {'id': id});
+    return PlaybackInfo.fromJson(data!);
+  }
+
   /// File End
 
   /// Player Start
@@ -93,8 +99,43 @@ abstract class ApiPlatform extends PlatformInterface {
 
   /// Player End
 
+  /// Subtitle Start
+  Future<List<SubtitleData>> subtitleQueryById(String id) async {
+    final data = await client.get<JsonList>('/subtitle/query/id', queryParameters: {'id': id});
+    return data!.map((e) => SubtitleData.fromJson(e)).toList();
+  }
+
+  Future<void> subtitleInsert(String id, SubtitleData subtitle) {
+    return client.put('/subtitle/update/id', data: {
+      'id': id,
+      'url': subtitle.url?.toString(),
+      'label': subtitle.label,
+      'mimeType': subtitle.mimeType,
+      'language': subtitle.language,
+      'selected': subtitle.selected,
+    });
+  }
+
+  Future<void> subtitleDeleteById(dynamic id) {
+    return client.delete('/subtitle/delete/id', data: {'id': id});
+  }
+
+  /// Subtitle End
+
+  /// Setting Start
+  Future<SettingScraper> settingScraperQuery() async {
+    final data = await client.get<Json>('/setting/scraper/query');
+    return SettingScraper.fromJson(data!);
+  }
+
+  Future<void> settingScraperUpdate(SettingScraper data) {
+    return client.post('/setting/scraper/update', data: data.toJson());
+  }
+
+  /// Setting End
+
   /// DownloadTask Start
-  Future<void> downloadTaskCreate(String id) async {
+  Future<void> downloadTaskCreate(dynamic id) async {
     await requestStoragePermission();
     return client.put('/download/task/create', data: {'id': id});
   }
@@ -117,6 +158,26 @@ abstract class ApiPlatform extends PlatformInterface {
   }
 
   /// DownloadTask End
+
+  /// ScheduleTask Start
+  Future<List<ScheduleTask>> scheduleTaskQueryByAll() async {
+    final data = await client.get<JsonList>('/schedule/task/query/all');
+    return data!.map((e) => ScheduleTask.fromJson(e)).toList();
+  }
+
+  Future<void> scheduleTaskPauseById(int id) async {
+    return client.post('/schedule/task/pause/id', data: {'id': id});
+  }
+
+  Future<void> scheduleTaskResumeById(int id) async {
+    return client.post('/schedule/task/resume/id', data: {'id': id});
+  }
+
+  Future<void> scheduleTaskDeleteById(int id) async {
+    return client.delete('/schedule/task/delete/id', data: {'id': id});
+  }
+
+  /// ScheduleTask End
 
   /// Session Start
   Future<Session<T>> sessionStatus<T>(String id) async {
@@ -173,8 +234,32 @@ abstract class ApiPlatform extends PlatformInterface {
   /// Server End
 
   /// Search Start
-  Future<SearchFuzzyResult> searchFuzzy(String filter) async {
-    final data = await client.get<Json>('/search/fuzzy', queryParameters: {'filter': filter});
+  Future<SearchFuzzyResult> searchFuzzy(
+    String type, {
+    String? filter,
+    List<dynamic>? genres,
+    List<dynamic>? studios,
+    List<dynamic>? keywords,
+    List<dynamic>? mediaCast,
+    List<dynamic>? mediaCrew,
+    bool? watched,
+    bool? favorite,
+    required int offset,
+    required int limit,
+  }) async {
+    final data = await client.post<Json>('/search/fuzzy', data: {
+      'type': type,
+      'filter': filter,
+      'genres': genres,
+      'studios': studios,
+      'keywords': keywords,
+      'mediaCast': mediaCast,
+      'mediaCrew': mediaCrew,
+      'watched': watched,
+      'favorite': favorite,
+      'limit': limit,
+      'offset': offset,
+    });
     return SearchFuzzyResult.fromJson(data!);
   }
 
@@ -249,9 +334,9 @@ abstract class ApiPlatform extends PlatformInterface {
     return data!.map((e) => MediaRecommendation.fromJson(e)).toList();
   }
 
-  Future<List<Movie>> movieQueryAll([MediaSearchQuery? query]) async {
-    final data = await client.get<JsonList>('/movie/query/all', queryParameters: query?.toMap());
-    return data!.map((e) => Movie.fromJson(e)).toList();
+  Future<PageData<Movie>> movieQueryAll([MediaSearchQuery? query]) async {
+    final data = await client.get<Json>('/movie/query/all', queryParameters: query?.toMap());
+    return PageData.fromJson(data!, (data['data'] as JsonList).map((e) => Movie.fromJson(e)));
   }
 
   Future<List<Movie>> movieQueryByFilter(QueryType type, dynamic id) async {
@@ -269,22 +354,17 @@ abstract class ApiPlatform extends PlatformInterface {
     return data!.map((e) => Movie.fromJson(e)).toList();
   }
 
-  Future<void> movieMetadataUpdateById({required dynamic id, required String title, DateTime? airDate}) {
-    return client.post('/movie/metadata/update/id', data: {'id': id, 'title': title, 'airDate': airDate?.format()});
+  Future<void> movieMetadataUpdateById(Json data) {
+    return client.post('/movie/metadata/update/id', data: data);
   }
 
-  Future<void> movieSubtitleUpdateById({required dynamic id, required SubtitleData subtitle}) {
-    return client.post('/movie/subtitle/update/id', data: {
-      'id': id,
-      'url': subtitle.url?.toString(),
-      'title': subtitle.title,
-      'mimeType': subtitle.mimeType,
-      'language': subtitle.language,
-    });
+  Future<void> movieScraperById(dynamic id, String scraperId, String scraperType, String? language) {
+    return client.post('/movie/scraper/id', data: {'id': id, 'scraperId': scraperId, 'scraperType': scraperType, 'language': language});
   }
 
-  Future<void> movieUpdateById(dynamic id, String title, String language, {String? year, int? index}) {
-    return client.post('/movie/update/id', data: {'id': id, 'title': title, 'year': year, 'language': language, 'index': index});
+  Future<List<SearchResult>> movieScraperSearch(dynamic id, String title, {String? language, String? year}) async {
+    final data = await client.get<JsonList>('/movie/scraper/search', queryParameters: {'id': id, 'title': title, 'year': year, 'language': language});
+    return data!.map((e) => SearchResult.fromJson(e)).toList();
   }
 
   Future<void> movieRenameById(dynamic id) {
@@ -304,9 +384,9 @@ abstract class ApiPlatform extends PlatformInterface {
   }
 
   /// TV Series Start
-  Future<List<TVSeries>> tvSeriesQueryAll([MediaSearchQuery? query]) async {
-    final data = await client.get<JsonList>('/tv/series/query/all', queryParameters: query?.toMap());
-    return data!.map((e) => TVSeries.fromJson(e)).toList();
+  Future<PageData<TVSeries>> tvSeriesQueryAll([MediaSearchQuery? query]) async {
+    final data = await client.get<Json>('/tv/series/query/all', queryParameters: query?.toMap());
+    return PageData.fromJson(data!, (data['data'] as JsonList).map((e) => TVSeries.fromJson(e)));
   }
 
   Future<List<TVSeries>> tvSeriesQueryByFilter(QueryType type, dynamic id) async {
@@ -324,16 +404,21 @@ abstract class ApiPlatform extends PlatformInterface {
     return data!.map((e) => TVEpisode.fromJson(e)).toList();
   }
 
-  Future<void> tvSeriesUpdateById(dynamic id, String title, String language, {String? year, int? index}) {
-    return client.post('/tv/series/update/id', data: {'id': id, 'title': title, 'year': year, 'language': language, 'index': index});
+  Future<void> tvSeriesScraperById(dynamic id, String scraperId, String scraperType, String? language) {
+    return client.post('/tv/series/scraper/id', data: {'id': id, 'scraperId': scraperId, 'scraperType': scraperType, 'scraperLang': language});
+  }
+
+  Future<List<SearchResult>> tvSeriesScraperSearch(dynamic id, String title, {String? language, String? year}) async {
+    final data = await client.get<JsonList>('/tv/series/scraper/search', queryParameters: {'id': id, 'title': title, 'year': year, 'language': language});
+    return data!.map((e) => SearchResult.fromJson(e)).toList();
   }
 
   Future<void> tvSeriesSyncById(dynamic id) {
     return client.post('/tv/series/sync/id', data: {'id': id});
   }
 
-  Future<void> tvSeriesMetadataUpdateById({required dynamic id, required String title, DateTime? airDate}) {
-    return client.post('/tv/series/metadata/update/id', data: {'id': id, 'title': title, 'airDate': airDate?.format()});
+  Future<void> tvSeriesMetadataUpdateById(Json data) {
+    return client.post('/tv/series/metadata/update/id', data: data);
   }
 
   Future<void> tvSeriesRenameById(dynamic id) {
@@ -369,18 +454,8 @@ abstract class ApiPlatform extends PlatformInterface {
     return TVEpisode.fromJson(data!);
   }
 
-  Future<void> tvEpisodeMetadataUpdateById({required dynamic id, required String title, required int episode}) {
-    return client.post('/tv/episode/metadata/update/id', data: {'id': id, 'title': title, 'episode': episode});
-  }
-
-  Future<void> tvEpisodeSubtitleUpdateById({required dynamic id, required SubtitleData subtitle}) {
-    return client.post('/tv/episode/subtitle/update/id', data: {
-      'id': id,
-      'url': subtitle.url?.toString(),
-      'title': subtitle.title,
-      'mimeType': subtitle.mimeType,
-      'language': subtitle.language,
-    });
+  Future<void> tvEpisodeMetadataUpdateById(Json data) {
+    return client.post('/tv/episode/metadata/update/id', data: data);
   }
 
   Future<void> tvEpisodeDeleteById(dynamic id) {
@@ -412,8 +487,11 @@ abstract class ApiPlatform extends PlatformInterface {
     }).then((value) => value['id'] as dynamic);
   }
 
-  Future<void> libraryRefreshById(dynamic id, bool incremental, String behavior) {
-    throw UnimplementedError('libraryRefreshById() has not been implemented.');
+  Future<void> libraryRefreshById(dynamic id, bool incremental) {
+    return client.post('/library/refresh/id', data: {
+      'id': id,
+      'incremental': incremental,
+    });
   }
 
   Future<void> libraryDeleteById(dynamic id) {
@@ -443,6 +521,16 @@ abstract class ApiPlatform extends PlatformInterface {
     return data!.map((e) => Actor.fromJson(e)).toList();
   }
 
+  Future<List<MediaCast>> castQueryAll() async {
+    final data = await client.get<JsonList>('/cast/query/all');
+    return data!.map((e) => MediaCast.fromJson(e)).toList();
+  }
+
+  Future<List<MediaCrew>> crewQueryAll() async {
+    final data = await client.get<JsonList>('/crew/query/all');
+    return data!.map((e) => MediaCrew.fromJson(e)).toList();
+  }
+
   Future<void> markWatched(MediaType type, dynamic id, bool watched) {
     return client.post('/markWatched/update', data: {'id': id, 'marked': watched, 'type': type.name});
   }
@@ -451,12 +539,21 @@ abstract class ApiPlatform extends PlatformInterface {
     return client.post('/markFavorite/update', data: {'id': id, 'marked': favorite, 'type': type.name});
   }
 
-  Future<void> updatePlayedStatus(LibraryType type, dynamic id, {required Duration position, required Duration duration}) {
+  Future<void> updatePlayedStatus(
+    LibraryType type,
+    dynamic id, {
+    required Duration position,
+    required Duration duration,
+    String? eventType,
+    dynamic others,
+  }) {
     return client.post('/playedStatus/update', data: {
       'type': type.name,
       'id': id,
       'position': position.inMilliseconds,
       'duration': duration.inMilliseconds,
+      'eventType': eventType,
+      'others': others,
     });
   }
 
@@ -483,12 +580,8 @@ abstract class ApiPlatform extends PlatformInterface {
     return PageData.fromJson(data!, (data['data'] as JsonList).map((e) => Log.fromJson(e)));
   }
 
-  Future<bool> checkUpdate(
-    String updateUrl,
-    Version currentVersion, {
-    required Future<void> Function(UpdateResp data, String url) needUpdate,
-  }) {
-    return Future.value(false);
+  Future<UpdateData?> checkUpdate(String updateUrl, bool prerelease, Version currentVersion) {
+    return Future.value();
   }
 
   /// Miscellaneous End
@@ -584,10 +677,4 @@ abstract class ApiClient {
   Future<T?> put<T>(String path, {Object? data});
 
   Future<T?> delete<T>(String path, {Object? data});
-}
-
-extension on DateTime {
-  String format() {
-    return formatDate(this, [yyyy, '-', mm, '-', dd]);
-  }
 }

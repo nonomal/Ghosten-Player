@@ -45,10 +45,6 @@ abstract class PlayerPlatform extends PlatformInterface {
     throw UnimplementedError('requestPip() has not been implemented.');
   }
 
-  Future<void> setSkipPosition(String type, List<int> list) {
-    throw UnimplementedError('setSkipPosition() has not been implemented.');
-  }
-
   Future<void> setTransform(List<double> matrix) {
     throw UnimplementedError('setTransform() has not been implemented.');
   }
@@ -57,8 +53,8 @@ abstract class PlayerPlatform extends PlatformInterface {
     throw UnimplementedError('setAspectRatio() has not been implemented.');
   }
 
-  Future<void> setSources(List<Map<String, dynamic>> playlist, int index) {
-    throw UnimplementedError('setSources() has not been implemented.');
+  Future<void> setSource(Map<String, dynamic>? item) {
+    throw UnimplementedError('setSource() has not been implemented.');
   }
 
   Future<void> updateSource(Map<String, dynamic> source, int index) {
