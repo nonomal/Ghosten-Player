@@ -115,87 +115,120 @@ enum AspectRatioType {
   }
 }
 
-enum PlaylistItemSourceType {
-  local,
-  hls,
-  rtsp,
-  other;
-
-  static PlaylistItemSourceType fromBroadcastUri(Uri uri) {
-    return switch (uri.scheme.toLowerCase()) {
-      'http' || 'https' => PlaylistItemSourceType.hls,
-      'rtsp' => PlaylistItemSourceType.rtsp,
-      'file' => PlaylistItemSourceType.local,
-      _ => PlaylistItemSourceType.other,
-    };
-  }
-
-  static PlaylistItemSourceType fromUri(Uri uri) {
-    if (uri.scheme == 'file') {
-      return PlaylistItemSourceType.local;
-    }
-    final path = uri.path.split('.');
-    String? ext;
-    if (path.length > 1) {
-      ext = path.last;
-    }
-    return switch (ext) {
-      'm3u8' => PlaylistItemSourceType.hls,
-      _ => PlaylistItemSourceType.other,
-    };
-  }
-}
-
-class PlaylistItem<T> {
-  final String? poster;
+class PlaylistItemDisplay<T> extends Equatable {
   final String? title;
   final String? description;
-  final Uri url;
+  final String? poster;
+  final String? fileId;
+  final Uri? url;
+  final T source;
   final Duration start;
   final Duration end;
-  final PlaylistItemSourceType sourceType;
-  final List<Subtitle>? subtitles;
-  final T source;
 
-  const PlaylistItem({
-    required this.url,
-    required this.sourceType,
+  const PlaylistItemDisplay({
     required this.source,
+    this.fileId,
     this.title,
     this.description,
     this.poster,
-    this.subtitles,
+    this.url,
     this.start = Duration.zero,
     this.end = Duration.zero,
   });
 
-  PlaylistItem<T> copyWith({
+  PlaylistItemDisplay<T> copyWith({
     String? poster,
     String? title,
     String? description,
+    String? mimeType,
     Uri? url,
     Duration? start,
     Duration? end,
-    PlaylistItemSourceType? sourceType,
-    List<Subtitle>? subtitles,
+    T? source,
   }) {
-    return PlaylistItem(
+    return PlaylistItemDisplay(
+      fileId: fileId,
       poster: poster ?? this.poster,
       title: title ?? this.title,
       description: description ?? this.description,
       url: url ?? this.url,
       start: start ?? this.start,
       end: end ?? this.end,
-      sourceType: sourceType ?? this.sourceType,
+      source: source ?? this.source,
+    );
+  }
+
+  PlaylistItem toItem({
+    Uri? url,
+    List<Subtitle> subtitles = const [],
+  }) {
+    return PlaylistItem(
+      poster: poster,
+      title: title,
+      description: description,
+      url: url ?? this.url!,
+      start: start,
+      end: end,
+      subtitles: subtitles,
+    );
+  }
+
+  @override
+  List<Object?> get props => [title, description, poster];
+}
+
+class PlaylistItem extends Equatable {
+  final String? poster;
+  final String? title;
+  final String? description;
+  final String? mimeType;
+  final Uri url;
+  final Duration start;
+  final Duration end;
+  final List<Subtitle>? subtitles;
+  final dynamic others;
+
+  const PlaylistItem({
+    required this.url,
+    this.mimeType,
+    this.title,
+    this.description,
+    this.poster,
+    this.subtitles,
+    this.start = Duration.zero,
+    this.end = Duration.zero,
+    this.others,
+  });
+
+  PlaylistItem copyWith({
+    String? poster,
+    String? title,
+    String? description,
+    String? mimeType,
+    Uri? url,
+    Duration? start,
+    Duration? end,
+    Duration? duration,
+    List<Subtitle>? subtitles,
+    dynamic others,
+  }) {
+    return PlaylistItem(
+      poster: poster ?? this.poster,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      url: url ?? this.url,
+      mimeType: mimeType ?? this.mimeType,
+      start: start ?? this.start,
+      end: end ?? this.end,
       subtitles: subtitles ?? this.subtitles,
-      source: source,
+      others: others ?? this.others,
     );
   }
 
   Map<String, dynamic> toSource() {
     return {
-      'type': sourceType.name,
       'url': url.toString(),
+      'mimeType': parseMimeType(url),
       'title': title,
       'description': description,
       'poster': poster,
@@ -206,10 +239,31 @@ class PlaylistItem<T> {
   }
 
   @override
-  int get hashCode => url.hashCode;
+  List<Object?> get props => [url, title, poster];
+}
 
-  @override
-  bool operator ==(Object other) => other is PlaylistItem && url == other.url && title == other.title && url == other.url;
+String? parseMimeType(Uri uri) {
+  if (uri.scheme == 'http' || uri.scheme == 'https') {
+    final path = uri.path;
+    final ext = path.split('.').last;
+    switch (ext.toLowerCase()) {
+      case 'm3u8':
+        return 'application/x-mpegURL';
+      case 'mp4':
+      case 'mkv':
+        return null;
+      case 'php':
+        return 'application/x-mpegURL';
+      default:
+        if (ext.length > 4) {
+          return 'application/x-mpegURL';
+        } else {
+          return null;
+        }
+    }
+  } else {
+    return null;
+  }
 }
 
 enum SubtitleMimeType {
@@ -219,6 +273,9 @@ enum SubtitleMimeType {
   srt;
 
   static SubtitleMimeType? fromString(String? str) {
+    if (str?.toLowerCase() == 'subrip') {
+      return SubtitleMimeType.srt;
+    }
     return SubtitleMimeType.values.firstWhereOrNull((element) => element.name == str);
   }
 }
@@ -227,14 +284,24 @@ class Subtitle {
   final Uri url;
   final SubtitleMimeType mimeType;
   final String? language;
+  final String? label;
+  final bool selected;
 
-  const Subtitle({required this.url, required this.mimeType, this.language});
+  const Subtitle({
+    required this.url,
+    required this.mimeType,
+    this.language,
+    this.label,
+    this.selected = false,
+  });
 
   Map<String, dynamic> toJson() {
     return {
       'url': url.toString(),
       'mimeType': mimeType.name,
       'language': language,
+      'label': label,
+      'selected': selected,
     };
   }
 }

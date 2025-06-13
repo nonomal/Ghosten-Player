@@ -1,9 +1,10 @@
 import 'package:animations/animations.dart';
-import 'package:api/api.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:provider/provider.dart';
 
+import '../l10n/app_localizations.dart';
+import '../providers/shortcut_tv.dart';
 import '../utils/utils.dart';
 import 'components/clock.dart';
 import 'components/icon_button.dart';
@@ -34,16 +35,16 @@ class _HomeState extends State<TVHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final shortcuts = context.watch<ShortcutTV>();
     return Focus(
       skipTraversal: true,
       onKeyEvent: (FocusNode node, KeyEvent event) {
         if (event is KeyDownEvent || event is KeyRepeatEvent) {
-          switch (event.logicalKey) {
-            case LogicalKeyboardKey.contextMenu:
-              if (!_scaffoldKey.currentState!.isEndDrawerOpen) {
-                _scaffoldKey.currentState!.openEndDrawer();
-                return KeyEventResult.handled;
-              }
+          if (event.logicalKey == shortcuts.menu) {
+            if (!_scaffoldKey.currentState!.isEndDrawerOpen) {
+              _scaffoldKey.currentState!.openEndDrawer();
+              return KeyEventResult.handled;
+            }
           }
         }
         return KeyEventResult.ignored;
@@ -51,23 +52,6 @@ class _HomeState extends State<TVHomePage> {
       child: Scaffold(
         key: _scaffoldKey,
         extendBodyBehindAppBar: true,
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-        floatingActionButton: StreamBuilder(
-            stream: Api.progress$,
-            builder: (context, snapshot) => switch (snapshot.data) {
-                  null => const SizedBox(),
-                  0 => const LinearProgressIndicator(backgroundColor: Colors.transparent),
-                  -1 => LinearProgressIndicator(color: Theme.of(context).colorScheme.error, value: 1),
-                  _ => TweenAnimationBuilder(
-                      tween: Tween(end: snapshot.data),
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeOut,
-                      builder: (BuildContext context, double value, Widget? child) => LinearProgressIndicator(
-                        value: value,
-                        backgroundColor: Colors.transparent,
-                      ),
-                    )
-                }),
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           surfaceTintColor: Colors.transparent,
@@ -78,36 +62,37 @@ class _HomeState extends State<TVHomePage> {
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
                 label: Text(AppLocalizations.of(context)!.search),
-                onPressed: () => navigateTo(context, const SearchPage()),
+                onPressed: () => navigateTo(context, const SearchPage(autofocus: true)),
                 style: TextButton.styleFrom(
                   backgroundColor: Colors.transparent,
                   iconColor: Colors.white,
-                  foregroundColor: Colors.white,
-                  textStyle: const TextStyle(color: Colors.white),
+                  foregroundColor: Theme.of(context).colorScheme.onSurface,
                   visualDensity: VisualDensity.compact,
                 ),
-                icon: const Icon(Icons.mic_rounded, size: 20, color: Colors.grey),
+                icon: const Icon(Icons.search_rounded, size: 20, color: Colors.grey),
               ),
             ),
           ),
           title: _HomeTabs(
-              tabs: [
-                AppLocalizations.of(context)!.homeTabTV,
-                AppLocalizations.of(context)!.homeTabMovie,
-                AppLocalizations.of(context)!.homeTabLive,
-              ],
-              onTabChange: (index) {
-                setState(() {
-                  reverse = true;
-                  tabIndex = index;
-                });
-              }),
+            tabs: [
+              AppLocalizations.of(context)!.homeTabTV,
+              AppLocalizations.of(context)!.homeTabMovie,
+              AppLocalizations.of(context)!.homeTabLive,
+            ],
+            onTabChange: (index) {
+              setState(() {
+                reverse = true;
+                tabIndex = index;
+              });
+            },
+          ),
           actions: [
             TVIconButton(
-                onPressed: () {
-                  _scaffoldKey.currentState!.openEndDrawer();
-                },
-                icon: const Icon(Icons.settings_outlined)),
+              onPressed: () {
+                _scaffoldKey.currentState!.openEndDrawer();
+              },
+              icon: const Icon(Icons.settings_outlined),
+            ),
             const SizedBox(width: 12),
             const Clock(),
             const SizedBox(width: 48),
@@ -120,20 +105,22 @@ class _HomeState extends State<TVHomePage> {
             color: Theme.of(context).colorScheme.surfaceContainerLow,
             child: Navigator(
               key: _navigatorKey,
-              onGenerateRoute: (settings) => FadeInPageRoute(builder: (context) => const SettingsPage(), settings: settings),
+              onGenerateRoute:
+                  (settings) => FadeInPageRoute(builder: (context) => const SettingsPage(), settings: settings),
             ),
           ),
         ),
         body: PageTransitionSwitcher(
           reverse: reverse,
           duration: const Duration(milliseconds: 800),
-          transitionBuilder: (child, primaryAnimation, secondaryAnimation) => SharedAxisTransition(
-            animation: primaryAnimation,
-            secondaryAnimation: secondaryAnimation,
-            transitionType: SharedAxisTransitionType.horizontal,
-            fillColor: Colors.transparent,
-            child: child,
-          ),
+          transitionBuilder:
+              (child, primaryAnimation, secondaryAnimation) => SharedAxisTransition(
+                animation: primaryAnimation,
+                secondaryAnimation: secondaryAnimation,
+                transitionType: SharedAxisTransitionType.horizontal,
+                fillColor: Colors.transparent,
+                child: child,
+              ),
           child: switch (tabIndex) {
             0 => TVListPage(endDrawerNavigatorKey: _navigatorKey),
             1 => MovieListPage(endDrawerNavigatorKey: _navigatorKey),
@@ -166,9 +153,11 @@ class _HomeTabsState extends State<_HomeTabs> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    Future.delayed(const Duration(milliseconds: 10)).then((_) => setState(() {
-          _updateActiveLine(tabKeys[_active].currentContext!);
-        }));
+    Future.delayed(const Duration(milliseconds: 10)).then(
+      (_) => setState(() {
+        _updateActiveLine(tabKeys[_active].currentContext!);
+      }),
+    );
   }
 
   @override
@@ -223,24 +212,29 @@ class _HomeTabsState extends State<_HomeTabs> {
           children: [
             Row(
               mainAxisSize: MainAxisSize.min,
-              children: widget.tabs.indexed
-                  .map((tab) => GestureDetector(
-                        onTap: () {
-                          _active = tab.$1;
-                          widget.onTabChange(_active);
-                          _updateActiveLine(tabKeys[_active].currentContext!);
-                          setState(() {});
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
-                          child: Text(
-                            tab.$2,
-                            key: tabKeys[tab.$1],
-                            style: Theme.of(context).textTheme.titleMedium!.copyWith(color: tab.$1 == _active && _tabFocused ? color : Colors.grey),
+              children:
+                  widget.tabs.indexed
+                      .map(
+                        (tab) => GestureDetector(
+                          onTap: () {
+                            _active = tab.$1;
+                            widget.onTabChange(_active);
+                            _updateActiveLine(tabKeys[_active].currentContext!);
+                            setState(() {});
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+                            child: Text(
+                              tab.$2,
+                              key: tabKeys[tab.$1],
+                              style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                                color: tab.$1 == _active && _tabFocused ? color : Colors.grey,
+                              ),
+                            ),
                           ),
                         ),
-                      ))
-                  .toList(),
+                      )
+                      .toList(),
             ),
             AnimatedContainer(
               duration: const Duration(milliseconds: 400),
@@ -249,8 +243,10 @@ class _HomeTabsState extends State<_HomeTabs> {
               height: 2,
               margin: EdgeInsets.only(left: _tabFocused ? _lineOffset : _lineOffset + _lineWidth * 0.2),
               decoration: BoxDecoration(
-                  color: _tabFocused ? color : Colors.grey, borderRadius: const BorderRadius.only(topLeft: Radius.circular(2), topRight: Radius.circular(2))),
-            )
+                color: _tabFocused ? color : Colors.grey,
+                borderRadius: const BorderRadius.only(topLeft: Radius.circular(2), topRight: Radius.circular(2)),
+              ),
+            ),
           ],
         ),
       ),

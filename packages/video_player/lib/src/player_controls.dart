@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vector_math/vector_math_64.dart' as vm;
 
 import '../player.dart';
@@ -38,6 +39,7 @@ class PlayerZoomWrapper extends StatefulWidget {
   final Widget child;
   final double minScale;
   final double maxScale;
+  final ValueChanged<bool> onZoomChanged;
 
   const PlayerZoomWrapper({
     super.key,
@@ -45,16 +47,16 @@ class PlayerZoomWrapper extends StatefulWidget {
     required this.child,
     this.minScale = 0.3,
     this.maxScale = 3,
+    required this.onZoomChanged,
   });
 
   @override
-  State<PlayerZoomWrapper> createState() => _PlayerZoomWrapperState();
+  State<PlayerZoomWrapper> createState() => PlayerZoomWrapperState();
 }
 
-class _PlayerZoomWrapperState extends State<PlayerZoomWrapper> {
+class PlayerZoomWrapperState extends State<PlayerZoomWrapper> {
   late final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
   final _controller = TransformationController();
-  final _showResetButton = ValueNotifier(false);
   late Matrix4 _initialMatrix;
   late Offset _initialFocalPoint;
   late double _initialScale;
@@ -70,7 +72,6 @@ class _PlayerZoomWrapperState extends State<PlayerZoomWrapper> {
 
   @override
   void dispose() {
-    _showResetButton.dispose();
     _controller.dispose();
     widget.controller.setTransform([1, 0, 0, 0, 1, 0, 0, 0, 1]);
     super.dispose();
@@ -78,41 +79,30 @@ class _PlayerZoomWrapperState extends State<PlayerZoomWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    final localizations = PlayerLocalizations.of(context);
-    return Stack(
-      children: [
-        RawGestureDetector(
-          gestures: {
-            ScaleGestureRecognizer: GestureRecognizerFactoryWithHandlers<ScaleGestureRecognizer>(
-              () => ScaleGestureRecognizer(),
-              (instance) => instance
-                ..onStart = _handleScaleStart
-                ..onUpdate = _handleScaleUpdate,
-            ),
-          },
-          behavior: HitTestBehavior.opaque,
-          child: Transform(
-            transform: _controller.value,
-            alignment: Alignment.center,
-            child: widget.child,
-          ),
-        ),
-        ListenableBuilder(
-          listenable: _showResetButton,
-          builder: (context, child) => _showResetButton.value ? child! : SizedBox(),
-          child: Align(
-            alignment: Alignment(0, 0.8),
-            child: FilledButton(
-                onPressed: () {
-                  widget.controller.setTransform([1, 0, 0, 0, 1, 0, 0, 0, 1]);
-                  _controller.value = Matrix4.identity();
-                  _showResetButton.value = false;
-                },
-                child: Text(localizations.buttonReset)),
-          ),
+    return RawGestureDetector(
+      gestures: {
+        ScaleGestureRecognizer: GestureRecognizerFactoryWithHandlers<ScaleGestureRecognizer>(
+          () => ScaleGestureRecognizer(),
+          (instance) => instance
+            ..onStart = _handleScaleStart
+            ..onUpdate = _handleScaleUpdate,
         )
-      ],
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Transform(
+        transform: _controller.value,
+        alignment: Alignment.center,
+        child: widget.child,
+      ),
     );
+  }
+
+  void reset() {
+    if (_controller.value != Matrix4.identity()) {
+      widget.controller.setTransform([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+      _controller.value = Matrix4.identity();
+      widget.onZoomChanged(false);
+    }
   }
 
   void _handleScaleStart(ScaleStartDetails details) {
@@ -157,7 +147,7 @@ class _PlayerZoomWrapperState extends State<PlayerZoomWrapper> {
       0,
       1,
     ]);
-    _showResetButton.value = true;
+    widget.onZoomChanged(true);
     _controller.value = matrix;
   }
 }
@@ -196,7 +186,12 @@ class PlayerPreviousButton<T> extends StatelessWidget {
     return ListenableBuilder(
         listenable: controller.isFirst,
         builder: (context, child) => controller.isFirst.value ? const SizedBox() : child!,
-        child: IconButton(onPressed: () => controller.next(controller.index.value! - 1), icon: const Icon(Icons.skip_previous_rounded)));
+        child: IconButton(
+            onPressed: () async {
+              await controller.next(controller.index.value! - 1);
+              await controller.play();
+            },
+            icon: const Icon(Icons.skip_previous_rounded)));
   }
 }
 
@@ -210,7 +205,12 @@ class PlayerNextButton<T> extends StatelessWidget {
     return ListenableBuilder(
         listenable: controller.isLast,
         builder: (context, child) => controller.isLast.value ? const SizedBox() : child!,
-        child: IconButton(onPressed: () => controller.next(controller.index.value! + 1), icon: const Icon(Icons.skip_next_rounded)));
+        child: IconButton(
+            onPressed: () async {
+              await controller.next(controller.index.value! + 1);
+              await controller.play();
+            },
+            icon: const Icon(Icons.skip_next_rounded)));
   }
 }
 
@@ -333,13 +333,14 @@ class PlayerLocalizations extends InheritedWidget {
 
 class PlayerSettings extends StatelessWidget {
   final PlayerController<dynamic> controller;
-
+  final SharedPreferences prefs;
   final List<Widget> Function(BuildContext)? actions;
 
   const PlayerSettings({
     super.key,
     required this.controller,
     this.actions,
+    required this.prefs,
   });
 
   @override
@@ -429,12 +430,12 @@ class PlayerSettings extends StatelessWidget {
               leading: const Icon(Icons.subtitles_outlined),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () async {
-                final initialStyle = SubtitleSettings.fromJson(await PlayerConfig.getSubtitleSettings());
+                final initialStyle = SubtitleSettings.fromJson(PlayerConfig.getSubtitleSettings(prefs));
                 if (!context.mounted) return;
 
                 final style = await Navigator.of(context).push(MaterialPageRoute(builder: (context) => PlayerSubtitleSettings(subtitleSettings: initialStyle)));
                 if (style != null) {
-                  PlayerConfig.setSubtitleSettings(style);
+                  PlayerConfig.setSubtitleSettings(prefs, style);
                   controller.setSubtitleStyle(style);
                 }
               },
@@ -442,56 +443,48 @@ class PlayerSettings extends StatelessWidget {
           ),
           SliverToBoxAdapter(child: const Divider()),
           StatefulBuilder(builder: (context, setState) {
-            return FutureBuilder(
-                future: PlayerConfig.getExtensionRendererMode(),
-                builder: (context, snapshot) {
-                  return SliverToBoxAdapter(
-                    child: PopupMenuButton(
-                        offset: const Offset(1, 0),
-                        onSelected: (value) async {
-                          await PlayerConfig.setExtensionRendererMode(value);
-                          await PlayerController.setPlayerOption('extensionRendererMode', value);
-                          setState(() {});
-                        },
-                        itemBuilder: (context) => [0, 1, 2]
-                            .map((i) => CheckedPopupMenuItem(
-                                  value: i,
-                                  checked: i == snapshot.data,
-                                  child: Text(localizations.extensionRendererMode(i.toString())),
-                                ))
-                            .toList(),
-                        child: ListTile(
-                          title: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(localizations.extensionRendererModeLabel),
-                              Expanded(
-                                child: Text(localizations.extensionRendererMode(snapshot.data.toString()),
-                                    textAlign: TextAlign.end, overflow: TextOverflow.ellipsis),
-                              ),
-                            ],
-                          ),
-                        )),
-                  );
-                });
+            final data = PlayerConfig.getExtensionRendererMode(prefs);
+            return SliverToBoxAdapter(
+              child: PopupMenuButton(
+                  offset: const Offset(1, 0),
+                  onSelected: (value) async {
+                    PlayerConfig.setExtensionRendererMode(prefs, value);
+                    await PlayerController.setPlayerOption('extensionRendererMode', value);
+                    setState(() {});
+                  },
+                  itemBuilder: (context) => [0, 1, 2]
+                      .map((i) => CheckedPopupMenuItem(
+                            value: i,
+                            checked: i == data,
+                            child: Text(localizations.extensionRendererMode(i.toString())),
+                          ))
+                      .toList(),
+                  child: ListTile(
+                    title: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(localizations.extensionRendererModeLabel),
+                        Expanded(
+                          child: Text(localizations.extensionRendererMode(data.toString()), textAlign: TextAlign.end, overflow: TextOverflow.ellipsis),
+                        ),
+                      ],
+                    ),
+                  )),
+            );
           }),
           StatefulBuilder(builder: (context, setState) {
-            return FutureBuilder(
-                future: PlayerConfig.getEnableDecoderFallback(),
-                builder: (context, snapshot) {
-                  return SliverToBoxAdapter(
-                    child: ListTile(
-                      title: Text(localizations.playerEnableDecoderFallback),
-                      trailing: Switch(
-                          value: snapshot.data ?? false,
-                          onChanged: (value) async {
-                            await PlayerConfig.setEnableDecoderFallback(value);
-                            await PlayerController.setPlayerOption('enableDecoderFallback', value);
-                            setState(() {});
-                          }),
-                    ),
-                  );
-                });
+            return SliverToBoxAdapter(
+              child: ListTile(
+                title: Text(localizations.playerEnableDecoderFallback),
+                trailing: Switch(
+                    value: PlayerConfig.getEnableDecoderFallback(prefs),
+                    onChanged: (value) async {
+                      PlayerConfig.setEnableDecoderFallback(prefs, value);
+                      await PlayerController.setPlayerOption('enableDecoderFallback', value);
+                      setState(() {});
+                    }),
+              ),
+            );
           }),
           SliverToBoxAdapter(
             child: SwitchListTile(
@@ -586,8 +579,9 @@ class PlayerSettings extends StatelessWidget {
 
 class PlayerPlatformView extends StatefulWidget {
   final VoidCallback? initialized;
+  final bool autoPip;
 
-  const PlayerPlatformView({super.key, this.initialized});
+  const PlayerPlatformView({super.key, this.initialized, this.autoPip = false});
 
   @override
   State<PlayerPlatformView> createState() => _PlayerPlatformViewState();
@@ -602,6 +596,7 @@ class _PlayerPlatformViewState extends State<PlayerPlatformView> {
       final offset = box.globalToLocal(Offset.zero);
       final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
       final language = Localizations.localeOf(context).languageCode;
+      final prefs = await SharedPreferences.getInstance();
       if (!context.mounted) return;
       await PlayerPlatform.instance.init({
         'language': language,
@@ -609,9 +604,10 @@ class _PlayerPlatformViewState extends State<PlayerPlatformView> {
         'height': (box.size.height * devicePixelRatio).round(),
         'top': (offset.dy * -1 * devicePixelRatio).round(),
         'left': (offset.dx * -1 * devicePixelRatio).round(),
-        'extensionRendererMode': await PlayerConfig.getExtensionRendererMode(),
-        'enableDecoderFallback': await PlayerConfig.getEnableDecoderFallback(),
-        'subtitleStyle': await PlayerConfig.getSubtitleSettings(),
+        'autoPip': widget.autoPip,
+        'extensionRendererMode': PlayerConfig.getExtensionRendererMode(prefs),
+        'enableDecoderFallback': PlayerConfig.getEnableDecoderFallback(prefs),
+        'subtitleStyle': PlayerConfig.getSubtitleSettings(prefs),
       });
       widget.initialized?.call();
     });
@@ -970,7 +966,7 @@ class _PlayerProgressViewState extends State<PlayerProgressView> {
                         duration: const Duration(milliseconds: 200),
                         widthFactor: max(_controller.buffered / _controller.duration ?? 0, 0),
                         child: Container(color: Theme.of(context).colorScheme.surfaceContainerHighest)),
-                    if (_controller.status == PlayerStatus.error || _controller.status == PlayerStatus.idle)
+                    if (_controller.status == PlayerStatus.error)
                       Container(color: Theme.of(context).colorScheme.errorContainer)
                     else if (_controller.seeking)
                       AnimatedFractionallySizedBox(

@@ -21,9 +21,13 @@ Ghosten Player 是一款同时适配 📱**Android Phone** 和 📺**Android TV*
 
 项目处于用爱发电阶段，请考虑[赞助](#赞助)支持项目持续维护。您的支持是我维护的最大动力(′･ω･`)
 
+QQ群 1033449405
+
 ## Features
 
 - 自动刮削媒体信息
+  - [themoviedb](https://www.themoviedb.org)
+  - nfo
 - 客户端
     - Android Phone 和 Android Pad
     - Android TV
@@ -31,7 +35,7 @@ Ghosten Player 是一款同时适配 📱**Android Phone** 和 📺**Android TV*
     - Macos (开发中)
 - 网盘支持
     - 支持[阿里云盘](https://www.alipan.com)、[夸克网盘](https://pan.quark.cn)、Webdav和本地媒体文件
-    - 支持[Emby](https://emby.media)和[Jellyfin](https://jellyfin.org)(Beta)
+  - 支持[Emby](https://emby.media)和[Jellyfin](https://jellyfin.org)
     - 清晰度切换(阿里云盘)
     - 多账号登录
     - 网盘文件查看和管理
@@ -54,6 +58,7 @@ Ghosten Player 是一款同时适配 📱**Android Phone** 和 📺**Android TV*
     - 浅色和深色模式
     - 支持手机端辅助TV端输入
     - 自定义界面大小
+  - TV端自定义按键
 - 其他
     - 纯本地运行，无需后端服务支持 [^1]
     - 软件体积小 (≈ 15 MB)
@@ -81,7 +86,7 @@ Ghosten Player 是一款同时适配 📱**Android Phone** 和 📺**Android TV*
 Android 6+
 
 ## Demo
-[https://ghosten-player.github.io](https://ghosten-player.github.io)
+[https://ghosteneditor.github.io/Ghosten-Player](https://ghosteneditor.github.io/Ghosten-Player)
 
 Demo仅作展示用，部分功能受Web限制，并非完整版。Demo可能更新不及时，详情以 [Releases](https://github.com/GhostenEditor/Ghosten-Player/releases/latest)
 最新版为准
@@ -146,7 +151,7 @@ Demo仅作展示用，部分功能受Web限制，并非完整版。Demo可能更
   - [跳过片头片尾](https://github.com/GhostenEditor/Ghosten-Player/wiki/%E8%B7%B3%E8%BF%87%E7%89%87%E5%A4%B4%E7%89%87%E5%B0%BE)
 - 常见问题
   - [Webdav报错](https://github.com/GhostenEditor/Ghosten-Player/wiki/Webdav%E6%8A%A5%E9%94%99)
-  - [刮削媒体信息超时](https://github.com/GhostenEditor/Ghosten-Player/wiki/%E5%88%AE%E5%89%8A%E5%AA%92%E4%BD%93%E4%BF%A1%E6%81%AF%E8%B6%85%E6%97%B6)
+  - [刮削媒体信息相关问题](https://github.com/GhostenEditor/Ghosten-Player/wiki/%E5%88%AE%E5%89%8A%E5%AA%92%E4%BD%93%E4%BF%A1%E6%81%AF%E7%9B%B8%E5%85%B3%E9%97%AE%E9%A2%98)
   - [应用闪退](https://github.com/GhostenEditor/Ghosten-Player/wiki/%E5%BA%94%E7%94%A8%E9%97%AA%E9%80%80)
   - [播放卡顿](https://github.com/GhostenEditor/Ghosten-Player/wiki/%E6%92%AD%E6%94%BE%E5%8D%A1%E9%A1%BF)
   - [数据错误](https://github.com/GhostenEditor/Ghosten-Player/wiki/%E6%95%B0%E6%8D%AE%E9%94%99%E8%AF%AF)
